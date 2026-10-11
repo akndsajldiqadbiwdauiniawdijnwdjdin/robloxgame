@@ -42,6 +42,7 @@ local state = {
 	PadUntil = 0,
 	Sparks = nil,
 	SpinBase = nil, -- heading before a spin-out, restored afterwards
+	Kick = 0,
 }
 
 local function getCar(): (Model?, VehicleSeat?)
@@ -145,6 +146,9 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 	if not car then
 		camera.FieldOfView = 70
+		if player:GetAttribute("DriftTier") ~= nil then
+			player:SetAttribute("DriftTier", nil)
+		end
 		return
 	end
 
@@ -166,10 +170,30 @@ RunService.Heartbeat:Connect(function(dt)
 	local offroad = car:GetAttribute("OffroadFactor")
 	local halfHeight = car:GetAttribute("HalfHeight")
 
-	-- Ground check: what are we driving on?
+	-- Ground check: what are we driving on? Rays under the middle, front and back. The
+	-- front/back pair gives the slope ahead, so the car tilts up as it reaches a ramp
+	-- instead of slamming its nose into it.
 	rayParams.FilterDescendantsInstances = { car, character }
+	local headingForward = Vector3.new(-math.sin(state.Heading), 0, -math.cos(state.Heading))
+	local reach = Vector3.new(0, -(halfHeight + 3), 0)
+	local halfLength = chassis.Size.Z / 2 - 0.5
 	local hit = workspace:Raycast(chassis.Position, Vector3.new(0, -(halfHeight + 1.5), 0), rayParams)
+	local frontHit = workspace:Raycast(chassis.Position + headingForward * halfLength, reach, rayParams)
+	local backHit = workspace:Raycast(chassis.Position - headingForward * halfLength, reach, rayParams)
+	hit = hit or (frontHit and frontHit.Distance < halfHeight + 1.5 and frontHit) or (backHit and backHit.Distance < halfHeight + 1.5 and backHit) or nil
 	local grounded = hit ~= nil and clock > airborneUntil
+	local groundUp = Vector3.yAxis
+	if frontHit and backHit then
+		local slope = frontHit.Position - backHit.Position
+		local headingRight = Vector3.new(-headingForward.Z, 0, headingForward.X)
+		local up = headingRight:Cross(slope)
+		if up.Magnitude > 1e-3 and up.Unit.Y > 0.6 then
+			groundUp = up.Unit
+		end
+	elseif hit then
+		groundUp = hit.Normal
+	end
+
 	local surfaceSpeed, surfaceGrip = 1, 1
 	if hit then
 		local surface = hit.Instance:GetAttribute("Surface")
@@ -179,6 +203,8 @@ RunService.Heartbeat:Connect(function(dt)
 		elseif surface == "Mud" then
 			surfaceSpeed = offroad * 0.75
 			surfaceGrip = 0.6
+		elseif surface == "Ice" then
+			surfaceGrip = 0.2
 		elseif surface ~= "Road" then
 			surfaceSpeed = offroad
 			surfaceGrip = 0.8
@@ -232,6 +258,10 @@ RunService.Heartbeat:Connect(function(dt)
 		local tier = driftTier()
 		if tier > 0 and not driftHeld and not stunned then
 			state.TurboUntil = clock + DRIFT.BoostTimes[tier]
+			state.Kick = DRIFT.Kick[tier]
+			-- Tell the HUD (local-only attributes).
+			player:SetAttribute("TurboTier", tier)
+			player:SetAttribute("TurboCount", (player:GetAttribute("TurboCount") or 0) + 1)
 		end
 		state.Drifting = false
 		state.Charge = 0
@@ -246,6 +276,10 @@ RunService.Heartbeat:Connect(function(dt)
 		rate = accel * BRAKE_FACTOR
 	end
 	local newForward = moveTowards(forwardSpeed, targetSpeed, rate * dt)
+	if state.Kick > 0 then
+		newForward = math.max(newForward, forwardSpeed + state.Kick)
+		state.Kick = 0
+	end
 
 	-- Sideways sliding and steering.
 	local newSide, yawRate
@@ -272,7 +306,11 @@ RunService.Heartbeat:Connect(function(dt)
 		state.SpinBase = nil
 	end
 	state.Heading += yawRate * dt
-	setSparks(if state.Drifting then driftTier() else nil)
+	local tier = if state.Drifting then driftTier() else nil
+	setSparks(tier)
+	if player:GetAttribute("DriftTier") ~= tier then
+		player:SetAttribute("DriftTier", tier) -- read by the HUD (local only)
+	end
 
 	if grounded then
 		drive.Enabled = true
@@ -283,7 +321,7 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 
 	-- Orientation: face the heading, tilt to match the ground (level out in the air).
-	local targetUp = if hit and grounded then hit.Normal else Vector3.yAxis
+	local targetUp = if grounded then groundUp else Vector3.yAxis
 	state.Up = state.Up:Lerp(targetUp, math.min(1, dt * 10)).Unit
 	local look = (forward - state.Up * forward:Dot(state.Up)).Unit
 	align.CFrame = CFrame.fromMatrix(Vector3.zero, look:Cross(state.Up), state.Up)
@@ -303,6 +341,15 @@ Remotes.Effect.OnClientEvent:Connect(function(kind, value)
 	if kind == "Launch" then
 		airborneUntil = os.clock() + LAUNCH_AIR_TIME
 		chassis.AssemblyLinearVelocity += value
+	elseif kind == "Teleport" then
+		car:PivotTo(value)
+		chassis.AssemblyLinearVelocity = Vector3.zero
+		chassis.AssemblyAngularVelocity = Vector3.zero
+		state.Heading = headingOf(value)
+		state.Drifting = false
+		state.Charge = 0
+		state.SpinBase = nil
+		state.Kick = 0
 	elseif kind == "Stop" then
 		chassis.AssemblyLinearVelocity = Vector3.zero
 		task.defer(function()

@@ -5,6 +5,7 @@
 -- Progress: each racer has a Sample (index along the track's centre line). Every tick it
 -- can only move FORWARD to the nearest sample within Config.Track.ProgressSearch, so
 -- shortcuts work but driving backwards over the line never counts.
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -20,7 +21,9 @@ local RaceManager = {}
 
 local RACE = Config.Race
 local TRACK = Config.Track
-local TRACK_ORDER = { "Downtown", "Canyon", "NeonHighway" }
+-- Every track module in server/Tracks. Players vote between VOTE_OPTIONS random picks.
+local TRACK_IDS = { "Downtown", "Canyon", "NeonHighway", "CoralCoast", "Factory", "Mansion", "Bathroom" }
+local VOTE_OPTIONS = 3
 
 local track
 local carsFolder: Folder
@@ -90,8 +93,35 @@ local function resetCar(racer)
 	local sample = track.Samples[racer.Sample]
 	local halfHeight = racer.Car:GetAttribute("HalfHeight")
 	local position = sample.Position + Vector3.new(0, halfHeight + 1.5, 0)
-	racer.Car:PivotTo(CFrame.lookAt(position, position + sample.Forward))
-	Remotes.Effect:FireClient(racer.Player, "Stop")
+	local target = CFrame.lookAt(position, position + sample.Forward)
+	racer.OffTrackTime = 0
+	-- The driver's machine simulates the car, so it does the teleport too.
+	racer.Car:PivotTo(target)
+	Remotes.Effect:FireClient(racer.Player, "Teleport", target)
+end
+
+-- Drivers are invisible inside their car (the car is the avatar during a race).
+local function hideCharacter(character: Model)
+	for _, descendant in character:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			descendant.Transparency = 1
+			descendant.CanCollide = false
+			descendant.Massless = true
+		elseif descendant:IsA("Decal") then
+			descendant.Transparency = 1
+		end
+	end
+end
+
+local function nearShortcut(position: Vector3): boolean
+	for _, shortcut in track.Shortcuts do
+		for _, sample in shortcut.Samples do
+			if flatDistance(position, sample.Position) < shortcut.Width then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 local function finish(race, racer)
@@ -120,23 +150,39 @@ local function updateRacer(race, racer)
 	local count = #samples
 	local position = racer.Chassis.Position
 
-	-- Fell off the track (gorge, highway edge, out of the world).
-	if position.Y < samples[racer.Sample].Position.Y - TRACK.FallDistance then
+	-- Fell off the track (gorge, highway edge, into the sea, out of the world).
+	if position.Y < samples[racer.Sample].Position.Y - TRACK.FallDistance or position.Y < track.KillY then
 		resetCar(racer)
 		notify(racer.Player, "Whoops! Back on track.", 1.5)
 		return
 	end
 
 	-- Nearest sample ahead (height counts double, so bridges and underpasses don't mix).
-	local bestOffset, bestDistance = nil, track.Width * 1.25
-	for offset = 0, TRACK.ProgressSearch do
+	local bestOffset, bestDistance = nil, math.huge
+	for offset = -3, TRACK.ProgressSearch do
 		local sample = samples[(racer.Sample - 1 + offset) % count + 1]
 		local distance = flatDistance(position, sample.Position) + math.abs(position.Y - sample.Position.Y) * 2
 		if distance < bestDistance then
 			bestOffset, bestDistance = offset, distance
 		end
 	end
-	if not bestOffset or bestOffset == 0 then
+
+	-- Lost (way off the road and not on a shortcut) or stuck: rescue after a few seconds.
+	local lost = bestDistance > track.Width * 1.6 and not nearShortcut(position)
+	-- Stuck = pressing the gas but not moving (wedged on scenery).
+	local stuck = racer.Chassis.AssemblyLinearVelocity.Magnitude < 3 and racer.Seat.ThrottleFloat ~= 0
+	if lost or stuck then
+		racer.OffTrackTime += 0.1
+	else
+		racer.OffTrackTime = 0
+	end
+	if racer.OffTrackTime >= (if lost then TRACK.OffTrackRescue else TRACK.StuckRescue) then
+		resetCar(racer)
+		notify(racer.Player, "🚁 Rescued! Back on track.", 1.5)
+		return
+	end
+
+	if bestDistance > track.Width * 1.25 or bestOffset <= 0 then
 		return
 	end
 
@@ -169,12 +215,14 @@ local function spawnRacers(race, participants)
 			local seat = car.DriverSeat
 			chassis.Anchored = true -- frozen until the countdown ends
 			seat:Sit(humanoid)
+			hideCharacter(character)
 
 			local racer = {
 				Player = player,
 				Car = car,
 				Chassis = chassis,
 				Humanoid = humanoid,
+				Seat = seat,
 				Lap = 0, -- becomes 1 when they cross the start line
 				Sample = sampleIndex,
 				Place = slot,
@@ -185,6 +233,7 @@ local function spawnRacers(race, participants)
 				Out = false,
 				PowerUp = nil,
 				LastReset = 0,
+				OffTrackTime = 0,
 			}
 
 			-- Jumping out of the car isn't allowed mid-race: put them back in.
@@ -299,20 +348,80 @@ local function runRace(race, participants)
 	task.wait(RACE.ResultsTime)
 end
 
-local trackIndex = 0
-local function loadNextTrack()
-	trackIndex = trackIndex % #TRACK_ORDER + 1
-	local def = require(script.Parent.Tracks[TRACK_ORDER[trackIndex]])
+local trackDefs = {}
+local function trackDef(id: string)
+	if not trackDefs[id] then
+		trackDefs[id] = require(script.Parent.Tracks[id])
+	end
+	return trackDefs[id]
+end
+
+local function loadTrack(id: string)
 	if track then
 		PowerUps.reset(track) -- clear leftovers from the previous track first
 	end
-	track = TrackBuilder.build(def)
+	track = TrackBuilder.build(trackDef(id))
+	track.Id = id
 	workspace:SetAttribute("TrackName", track.Name)
 	workspace:SetAttribute("Laps", track.Laps)
 end
 
+-- Map voting -----------------------------------------------------------------------
+
+local votes = {} -- [Player] = trackId
+local voteOptions = {}
+
+local function publishVotes()
+	local counts = {}
+	for _, id in voteOptions do
+		counts[id] = 0
+	end
+	for player, id in votes do
+		if player.Parent and counts[id] then
+			counts[id] += 1
+		end
+	end
+	workspace:SetAttribute("VoteCounts", HttpService:JSONEncode(counts))
+end
+
+local function startVote(lastId: string?)
+	local pool = {}
+	for _, id in TRACK_IDS do
+		if id ~= lastId then
+			table.insert(pool, id)
+		end
+	end
+	voteOptions = {}
+	while #voteOptions < VOTE_OPTIONS and #pool > 0 do
+		table.insert(voteOptions, table.remove(pool, math.random(1, #pool)))
+	end
+	local options = {}
+	for _, id in voteOptions do
+		table.insert(options, { Id = id, Name = trackDef(id).Name })
+	end
+	table.clear(votes)
+	workspace:SetAttribute("VoteOptions", HttpService:JSONEncode(options))
+	publishVotes()
+end
+
+local function endVote(): string
+	local counts = HttpService:JSONDecode(workspace:GetAttribute("VoteCounts") or "{}")
+	local best, bestIds = -1, {}
+	for _, id in voteOptions do
+		local count = counts[id] or 0
+		if count > best then
+			best, bestIds = count, { id }
+		elseif count == best then
+			table.insert(bestIds, id)
+		end
+	end
+	workspace:SetAttribute("VoteOptions", nil)
+	return bestIds[math.random(1, #bestIds)]
+end
+
 function RaceManager.start()
 	Lobby.build()
+	Lobby.startScreens()
 
 	carsFolder = Instance.new("Folder")
 	carsFolder.Name = "RaceCars"
@@ -348,15 +457,22 @@ function RaceManager.start()
 		if racer then
 			markOut(racer)
 		end
+		if votes[player] then
+			votes[player] = nil
+			publishVotes()
+		end
+	end)
+
+	Remotes.Vote.OnServerEvent:Connect(function(player, id)
+		if workspace:GetAttribute("RaceState") == "Intermission" and table.find(voteOptions, id) then
+			votes[player] = id
+			publishVotes()
+		end
 	end)
 
 	task.spawn(function()
-		local needTrack = true
 		while true do
-			if needTrack then
-				loadNextTrack()
-				needTrack = false
-			end
+			startVote(track and track.Id)
 			setState("Intermission", RACE.IntermissionTime)
 			task.wait(RACE.IntermissionTime)
 
@@ -368,6 +484,9 @@ function RaceManager.start()
 			end
 
 			if #participants >= RACE.MinPlayers then
+				local winner = endVote()
+				notifyAll("🏁 Next track: " .. trackDef(winner).Name, 3, true)
+				loadTrack(winner)
 				local race = { Racers = {}, Ordered = {}, Track = track, FinishedCount = 0, Count = 0 }
 				currentRace = race
 				local ok, err = pcall(runRace, race, participants)
@@ -375,7 +494,6 @@ function RaceManager.start()
 					warn("[RaceManager] Race crashed:", err)
 				end
 				cleanup(race)
-				needTrack = true
 			end
 		end
 	end)

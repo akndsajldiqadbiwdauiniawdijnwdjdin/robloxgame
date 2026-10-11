@@ -2,6 +2,7 @@
 -- equip cars, and buy upgrades. Purchases are validated on the server (server/Shop).
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -252,6 +253,8 @@ local function clearList()
 	table.clear(listItems)
 end
 
+local refresh -- defined below; card clicks call it
+
 local function buildCarList()
 	clearList()
 	local ownedCars = owned()
@@ -275,7 +278,7 @@ local function buildCarList()
 		text({ Position = UDim2.fromOffset(22, 31), Size = UDim2.new(1, -30, 0, 18), Text = status, TextColor3 = color, Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
 		card.Activated:Connect(function()
 			selectedId = car.Id
-			buildCarList()
+			refresh() -- updates the list, preview, name and stat bars
 		end)
 		table.insert(listItems, card)
 	end
@@ -323,7 +326,7 @@ local function buildUpgradeList()
 	actionButton.Text, actionButton.BackgroundColor3 = "UPGRADES APPLY TO EVERY CAR", GREY
 end
 
-local function refresh()
+function refresh()
 	cashLabel.Text = formatCash(player:GetAttribute("Cash") or 0)
 	carsTab.BackgroundColor3 = if tab == "Cars" then ORANGE else CARD
 	upgradesTab.BackgroundColor3 = if tab == "Upgrades" then ORANGE else CARD
@@ -368,6 +371,13 @@ openButton.Activated:Connect(function()
 end)
 closeButton.Activated:Connect(function()
 	window.Visible = false
+end)
+-- Walking up to the lobby car shop and pressing E opens the garage too.
+ProximityPromptService.PromptTriggered:Connect(function(prompt)
+	if prompt.Name == "OpenGarage" then
+		window.Visible = true
+		refresh()
+	end
 end)
 
 player.AttributeChanged:Connect(function(name)

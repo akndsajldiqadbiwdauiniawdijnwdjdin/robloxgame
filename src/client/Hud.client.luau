@@ -1,5 +1,6 @@
 -- HUD, notifications and power-up/reset input. All built in code. (Garage: Garage.client.luau)
 local ContextActionService = game:GetService("ContextActionService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -205,6 +206,112 @@ powerSlot.InputBegan:Connect(function(input)
 	end
 end)
 
+-- Map voting -----------------------------------------------------------------------
+
+local TRACK_COLORS = {
+	Downtown = Color3.fromRGB(255, 120, 0),
+	Canyon = Color3.fromRGB(190, 110, 60),
+	NeonHighway = Color3.fromRGB(220, 0, 180),
+	CoralCoast = Color3.fromRGB(0, 170, 220),
+	Factory = Color3.fromRGB(220, 170, 0),
+	Mansion = Color3.fromRGB(170, 30, 50),
+	Bathroom = Color3.fromRGB(90, 180, 230),
+}
+local voteFrame = create("Frame", {
+	Name = "Vote",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 50),
+	Size = UDim2.new(0, 600, 0, 104),
+	BackgroundTransparency = 1,
+	Visible = false,
+	Parent = gui,
+}, {
+	create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10) }),
+	create("UISizeConstraint", { MaxSize = Vector2.new(600, 104) }),
+})
+text({ Name = "VoteTitle", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 158), Size = UDim2.new(0, 360, 0, 22), Text = "", Parent = gui })
+local voteTitle = gui.VoteTitle
+local myVote = nil
+local voteButtons = {}
+
+local function rebuildVotes()
+	local options = workspace:GetAttribute("VoteOptions")
+	for _, button in voteButtons do
+		button:Destroy()
+	end
+	table.clear(voteButtons)
+	if not options then
+		voteFrame.Visible = false
+		voteTitle.Text = ""
+		myVote = nil
+		return
+	end
+	local counts = HttpService:JSONDecode(workspace:GetAttribute("VoteCounts") or "{}")
+	for index, option in HttpService:JSONDecode(options) do
+		local selected = option.Id == myVote
+		local button = text({
+			LayoutOrder = index,
+			Size = UDim2.new(0, 190, 1, 0),
+			BackgroundTransparency = 0,
+			BackgroundColor3 = TRACK_COLORS[option.Id] or ORANGE,
+			Text = "",
+			Parent = voteFrame,
+		}, true)
+		corner(10).Parent = button
+		create("UIStroke", { Color = if selected then Color3.new(1, 1, 1) else Color3.fromRGB(20, 20, 25), Thickness = if selected then 4 else 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = button })
+		text({ Position = UDim2.new(0, 8, 0, 8), Size = UDim2.new(1, -16, 0, 50), Text = option.Name, TextWrapped = true, TextStrokeTransparency = 0.2, Parent = button })
+		text({ Position = UDim2.new(0, 8, 1, -38), Size = UDim2.new(1, -16, 0, 30), Text = string.format("%d vote%s", counts[option.Id] or 0, if counts[option.Id] == 1 then "" else "s"), TextColor3 = Color3.fromRGB(255, 255, 200), Parent = button })
+		button.Activated:Connect(function()
+			myVote = option.Id
+			Remotes.Vote:FireServer(option.Id)
+			rebuildVotes()
+		end)
+		table.insert(voteButtons, button)
+	end
+	voteFrame.Visible = player:GetAttribute("Place") == nil
+	voteTitle.Text = if voteFrame.Visible then "VOTE FOR THE NEXT TRACK" else ""
+end
+workspace:GetAttributeChangedSignal("VoteOptions"):Connect(function()
+	myVote = nil
+	rebuildVotes()
+end)
+workspace:GetAttributeChangedSignal("VoteCounts"):Connect(rebuildVotes)
+rebuildVotes()
+
+-- Drift meter --------------------------------------------------------------------
+
+local driftLabel = text({
+	Name = "Drift",
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -82),
+	Size = UDim2.new(0, 260, 0, 34),
+	Text = "",
+	TextStrokeTransparency = 0,
+	Parent = gui,
+})
+
+player:GetAttributeChangedSignal("DriftTier"):Connect(function()
+	local tier = player:GetAttribute("DriftTier")
+	if tier == nil then
+		driftLabel.Text = ""
+	elseif tier == 0 then
+		driftLabel.Text = "DRIFT"
+		driftLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+	else
+		driftLabel.Text = "DRIFT " .. string.rep("●", tier) .. string.rep("○", 3 - tier)
+		driftLabel.TextColor3 = Config.Drift.TierColors[tier]
+	end
+end)
+
+player:GetAttributeChangedSignal("TurboCount"):Connect(function()
+	local tier = player:GetAttribute("TurboTier") or 1
+	bigText.TextColor3 = Config.Drift.TierColors[tier]
+	showBig(Config.Drift.Names[tier], 0.7)
+	task.delay(0.8, function()
+		bigText.TextColor3 = ORANGE
+	end)
+end)
+
 -- Cash ---------------------------------------------------------------------------
 
 local function refreshCash()
@@ -228,7 +335,7 @@ RunService.RenderStepped:Connect(function()
 	local remaining = math.max(0, (workspace:GetAttribute("StateEndsAt") or 0) - workspace:GetServerTimeNow())
 
 	if state == "Intermission" then
-		status.Text = string.format("%s in %d", workspace:GetAttribute("TrackName") or "Next race", math.ceil(remaining))
+		status.Text = string.format("Next race in %d", math.ceil(remaining))
 	elseif state == "Countdown" then
 		status.Text = "Get ready..."
 		bigToken += 1

@@ -33,6 +33,8 @@ local function template()
 		Equipped = "Beater",
 		Upgrades = {},
 		Purchases = {}, -- processed developer-product receipt ids
+		Spins = 0, -- extra wheel spins (bought or won)
+		LastFreeSpin = 0, -- unix time of the last free daily spin
 	}
 end
 
@@ -58,6 +60,8 @@ local function publish(player: Player, data)
 	player:SetAttribute("Wins", data.Wins)
 	player:SetAttribute("Equipped", data.Equipped)
 	player:SetAttribute("OwnedCars", HttpService:JSONEncode(data.OwnedCars))
+	player:SetAttribute("Spins", data.Spins)
+	player:SetAttribute("NextFreeSpin", data.LastFreeSpin + Config.Spin.Cooldown)
 	for _, upgrade in Config.Upgrades do
 		player:SetAttribute("Upg_" .. upgrade.Id, data.Upgrades[upgrade.Id] or 0)
 	end

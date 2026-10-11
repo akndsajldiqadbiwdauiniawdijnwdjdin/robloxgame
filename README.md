@@ -47,16 +47,31 @@ while turning) to drift, **E** use power-up, **R** reset to the track.
 
 Drift sparks go blue → orange → purple; release for a bigger boost each tier.
 
-### Tracks
+### Tracks (players vote between 3 random ones each round)
 
-- **Downtown Getaway**: city streets, chicane, overpass, dirt construction zone, back-alley shortcut.
-- **Dusty Canyon Run**: dirt rally, mesa climb, gorge jump, mud-pit shortcut for high-Traction cars.
-- **Neon Highway**: night figure-8 with an elevated freeway, neon rails and lots of boost pads.
+| Track | Theme |
+| --- | --- |
+| Downtown Getaway | City streets, overpass, dirt construction zone, alley + park-grass shortcuts |
+| Dusty Canyon Run | Dirt rally, mesa climb, gorge jump, mud-pit shortcut |
+| Neon City | Dusk figure-8 with an elevated freeway and neon rails |
+| Coral Coast | Boardwalk causeway over the sea, island jump (fall in = reset), sandbar shortcut |
+| Crusher Factory | Steel catwalks, conveyor boost pads, crushers that slam the road |
+| Grand Mansion | Red carpets, marble staircase to a balcony, library shortcut |
+| Bathroom Blitz | Toy-sized in a giant bathroom: soap (ice), bathtub rim, drain jump |
+
+Every track has Mario Kart-style edges: an offroad border strip, then a barrier, with
+openings where shortcuts start. Off-track or stuck for a few seconds = auto rescue.
 
 To add a track, copy a file in `src/server/Tracks/`, change the control `Points`
-(each Vector3's Y is road height) and add its name to `TRACK_ORDER` in `RaceManager.luau`.
-Track features are placed by "control point + fraction" (e.g. `At = 4.5` is halfway
-between points 4 and 5).
+(each Vector3's Y is road height) and add its file name to `TRACK_IDS` in
+`RaceManager.luau`. Track features are placed by "control point + fraction"
+(e.g. `At = 4.5` is halfway between points 4 and 5).
+
+### Lobby, daily spin and store
+
+The lobby has a car shop (walk up + **E** opens the garage), showroom halls with every
+car, tower screens with the next race, and a **Daily Spin** wheel (one free spin every
+24 hours; extra spins from the wheel or the store).
 
 ## Setup (one time)
 
@@ -83,11 +98,16 @@ Before going live, set `Config.Race.MinPlayers = 2`.
 - New power-up: add to `Config.PowerUps` + `Config.PowerUpOrder`, then a
   `handlers.YourId` function in `PowerUps.luau`.
 
-## Monetization
+## Monetization (store + 2x cash pass)
 
-Create a game pass and developer products on the Creator Dashboard, then put the IDs in
-`Config.Monetization`. Add buttons that call
-`MarketplaceService:PromptGamePassPurchase` / `PromptProductPurchase` wherever you like.
+1. Publish the game, then on the Creator Dashboard open your experience →
+   **Monetization → Developer Products** and create one product per entry in
+   `Config.Store` (cash packs and spin packs). Paste each product's ID into its
+   `ProductId` in `src/shared/Config.luau`.
+2. Optionally create a **Pass** for 2x Cash and put its ID in
+   `Config.Monetization.DoubleCashPassId`.
+
+Until IDs are filled in, the store buttons just say it isn't set up yet.
 
 ## Custom car models
 

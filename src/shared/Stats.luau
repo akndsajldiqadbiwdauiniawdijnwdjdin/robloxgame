@@ -43,8 +43,8 @@ function Stats.derive(s)
 		OffroadFactor = 0.4 + s.Traction * 0.05, -- top-speed multiplier on grass/sand
 		KnockbackScale = 1.3 - s.Weight * 0.06, -- heavy cars get thrown less
 		Density = 0.4 + s.Weight * 0.15, -- heavy cars shove light ones
-		TurboCharge = 0.6 + s.MiniTurbo * 0.1, -- drift charge speed
-		TurboPower = 1.2 + s.MiniTurbo * 0.025, -- drift boost speed multiplier
+		TurboCharge = 0.7 + s.MiniTurbo * 0.1, -- drift charge speed
+		TurboPower = 1.3 + s.MiniTurbo * 0.03, -- drift boost speed multiplier (1.33 .. 1.6)
 	}
 end
 

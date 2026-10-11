@@ -8,6 +8,8 @@ local DEFINITIONS = {
 	Notify = "RemoteEvent", -- server -> client (text, duration, big)
 	Effect = "RemoteEvent", -- server -> client (kind, value)
 	Shop = "RemoteFunction", -- client -> server (action, id) -> ok, message
+	Vote = "RemoteEvent", -- client -> server (trackId)
+	Spin = "RemoteFunction", -- client -> server () -> ok, prizeIndex | message, message
 }
 
 local folder
