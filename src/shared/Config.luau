@@ -2,7 +2,7 @@
 local Config = {}
 
 Config.Race = {
-	Laps = 3,
+	Laps = 3, -- default; a track can override it
 	MinPlayers = 1, -- set to 2+ for live servers; 1 lets you test solo
 	MaxPlayers = 16,
 	IntermissionTime = 15,
@@ -10,7 +10,6 @@ Config.Race = {
 	MaxRaceTime = 300,
 	FinishGraceTime = 30, -- everyone else gets this long after the winner crosses the line
 	ResultsTime = 7,
-	CheckpointRadius = 32,
 	ResetCooldown = 3,
 }
 
@@ -22,100 +21,35 @@ Config.Rewards = {
 }
 
 Config.Track = {
-	Samples = 96, -- road segments around the loop
-	CheckpointEvery = 8, -- one checkpoint every N segments
-	RoadWidth = 48,
-	BaseRadius = 300,
-	OffroadSpeedFactor = 0.55,
+	SampleSpacing = 10, -- studs between track samples
+	ProgressSearch = 80, -- how many samples ahead progress can jump (allows shortcuts)
+	FallDistance = 18, -- reset if this far below the track
+	DefaultWidth = 44,
 }
 
-Config.Cars = {
-	{
-		Id = "Beater",
-		Name = "Rusty Beater",
-		Price = 0,
-		MaxSpeed = 90,
-		Accel = 40,
-		Handling = 2.2,
-		Grip = 5,
-		Color = Color3.fromRGB(150, 110, 80),
-		Accent = Color3.fromRGB(90, 70, 50),
-	},
-	{
-		Id = "Tuner",
-		Name = "Street Tuner",
-		Price = 2500,
-		MaxSpeed = 105,
-		Accel = 50,
-		Handling = 2.5,
-		Grip = 5.5,
-		Color = Color3.fromRGB(40, 120, 255),
-		Accent = Color3.fromRGB(255, 255, 255),
-	},
-	{
-		Id = "Muscle",
-		Name = "Muscle Car",
-		Price = 8000,
-		MaxSpeed = 125,
-		Accel = 60,
-		Handling = 2.3,
-		Grip = 4.5,
-		Color = Color3.fromRGB(200, 30, 30),
-		Accent = Color3.fromRGB(20, 20, 20),
-	},
-	{
-		Id = "Supercar",
-		Name = "Supercar",
-		Price = 25000,
-		MaxSpeed = 145,
-		Accel = 72,
-		Handling = 2.8,
-		Grip = 6.5,
-		Color = Color3.fromRGB(255, 200, 0),
-		Accent = Color3.fromRGB(30, 30, 30),
-	},
-	{
-		Id = "Hypercar",
-		Name = "Hypercar",
-		Price = 75000,
-		MaxSpeed = 165,
-		Accel = 85,
-		Handling = 3.0,
-		Grip = 7,
-		Color = Color3.fromRGB(150, 0, 255),
-		Accent = Color3.fromRGB(0, 255, 200),
+-- Drifting (hold Space/Shift while turning) charges a Mini-Turbo.
+Config.Drift = {
+	MinSpeedFraction = 0.35, -- of top speed
+	TierTimes = { 0.9, 1.8, 2.8 }, -- seconds of drifting (scaled by Mini-Turbo stat)
+	BoostTimes = { 0.6, 1.1, 1.7 }, -- boost length per tier
+	TierColors = {
+		Color3.fromRGB(80, 170, 255), -- blue
+		Color3.fromRGB(255, 150, 30), -- orange
+		Color3.fromRGB(200, 80, 255), -- purple
 	},
 }
 
-Config.CarsById = {}
-for _, car in Config.Cars do
-	Config.CarsById[car.Id] = car
-end
+Config.BoostPad = { Duration = 1.2, SpeedBoost = 1.5 }
 
--- Upgrades are global (they apply to whichever car is equipped).
+-- Upgrades are global (they apply to whichever car is equipped) and add stat points.
 Config.Upgrades = {
-	{ Id = "Engine", Name = "Engine", Stat = "MaxSpeed", PerLevel = 0.06, MaxLevel = 5, BaseCost = 500 },
-	{ Id = "Turbo", Name = "Turbo", Stat = "Accel", PerLevel = 0.1, MaxLevel = 5, BaseCost = 400 },
-	{ Id = "Tires", Name = "Tires", Stat = "Handling", PerLevel = 0.06, MaxLevel = 5, BaseCost = 400 },
+	{ Id = "Engine", Name = "Engine", Boosts = { Speed = 0.4 }, MaxLevel = 5, BaseCost = 500 },
+	{ Id = "Turbo", Name = "Turbo", Boosts = { Acceleration = 0.4, MiniTurbo = 0.3 }, MaxLevel = 5, BaseCost = 400 },
+	{ Id = "Tires", Name = "Tires", Boosts = { Handling = 0.3, Traction = 0.4 }, MaxLevel = 5, BaseCost = 400 },
 }
 
 function Config.upgradeCost(upgrade, currentLevel: number): number
 	return math.floor(upgrade.BaseCost * 2 ^ currentLevel)
-end
-
-function Config.getCarStats(carId: string, upgrades)
-	local car = Config.CarsById[carId] or Config.Cars[1]
-	local stats = {
-		MaxSpeed = car.MaxSpeed,
-		Accel = car.Accel,
-		Handling = car.Handling,
-		Grip = car.Grip,
-	}
-	for _, upgrade in Config.Upgrades do
-		local level = (upgrades and upgrades[upgrade.Id]) or 0
-		stats[upgrade.Stat] *= 1 + upgrade.PerLevel * level
-	end
-	return stats
 end
 
 Config.PowerUps = {

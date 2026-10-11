@@ -4,6 +4,7 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Cars = require(ReplicatedStorage.Shared.Cars)
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local STORE_NAME = "IllegalRacing_v1"
@@ -42,7 +43,7 @@ local function reconcile(data)
 			data[key] = value
 		end
 	end
-	if not Config.CarsById[data.Equipped] or not data.OwnedCars[data.Equipped] then
+	if not Cars.ById[data.Equipped] or not data.OwnedCars[data.Equipped] then
 		data.Equipped = "Beater"
 	end
 	return data

@@ -10,23 +10,53 @@ Everything is built from code (track, cars, UI), so it runs in an empty Baseplat
 
 | File | Does |
 | --- | --- |
-| `src/shared/Config.luau` | **All tuning**: laps, rewards, cars, upgrades, power-ups, monetization IDs |
+| `src/shared/Config.luau` | Race rules, rewards, drift/boost tuning, upgrades, power-ups, monetization IDs |
+| `src/shared/Cars.luau` | **All 10 cars**: price, the 6 stats, colors and brick-built design |
+| `src/shared/Stats.luau` | The 6 stats and how they turn into physics |
+| `src/shared/CarBody.luau` | Builds a car's brick body (studs on top) from its design |
 | `src/shared/Remotes.luau` | Client/server remotes |
-| `src/server/RaceManager.luau` | Intermission → countdown → race → results loop, checkpoints, laps, standings, rewards |
-| `src/server/TrackBuilder.luau` | Generates the loop track, curbs, start gate, ramps, power-up boxes, lobby spawn |
-| `src/server/CarBuilder.luau` | Builds the car (physics chassis + decorative body), swaps in custom models |
+| `src/server/Tracks/*.luau` | **One file per track** (Downtown, Canyon, Neon Highway) |
+| `src/server/TrackBuilder.luau` | Turns a track file into road, surfaces, walls, jumps, boost pads, scenery |
+| `src/server/RaceManager.luau` | Track rotation, countdown, progress/laps, standings, rewards |
+| `src/server/Lobby.luau` | Studded lobby with a showroom of every car |
+| `src/server/CarBuilder.luau` | Physics chassis + body, swaps in custom models |
 | `src/server/PowerUps.luau` | Pick-ups and all weapon effects |
 | `src/server/PlayerData.luau` | DataStore saving (cash, wins, owned cars, upgrades) + leaderstats |
 | `src/server/Shop.luau` | Garage purchases, validated on the server |
 | `src/server/Monetization.luau` | 2x Cash game pass + cash developer products |
-| `src/client/Drive.client.luau` | Arcade driving physics (runs on the driver's machine) |
-| `src/client/Hud.client.luau` | HUD, notifications, garage UI, E/R input + mobile buttons |
+| `src/client/Drive.client.luau` | Arcade driving, drifting + Mini-Turbo, surfaces, boost pads |
+| `src/client/Garage.client.luau` | Garage UI: 3D preview, stat bars, buy/equip, upgrades |
+| `src/client/Hud.client.luau` | HUD, notifications, E/R input + mobile buttons |
 
-**Game loop:** race → earn cash (placement + steals, 2x with pass) → buy faster cars and
-upgrades in the Garage → race again. Back-of-pack racers roll Rockets/Steals more often.
+**Game loop:** race → earn cash (placement + steals, 2x with pass) → buy cars and
+upgrades in the Garage → next track. Back-of-pack racers roll Rockets/Steals more often.
 
-**Controls:** WASD / arrows / gamepad / mobile stick to drive, **E** use power-up,
-**R** reset to last checkpoint (if stuck or flipped).
+**Controls:** WASD / arrows / gamepad / mobile stick to drive, **Space or Shift** (hold
+while turning) to drift, **E** use power-up, **R** reset to the track.
+
+### The 6 stats (0–10)
+
+| Stat | Effect |
+| --- | --- |
+| Speed | Top speed |
+| Acceleration | How fast you reach top speed |
+| Weight | Heavy cars shove light ones and get stunned/thrown less |
+| Handling | Turn rate |
+| Traction | Grip, and how little dirt/grass/sand/mud slows you down |
+| Mini-Turbo | How fast drifts charge and how strong the boost is |
+
+Drift sparks go blue → orange → purple; release for a bigger boost each tier.
+
+### Tracks
+
+- **Downtown Getaway**: city streets, chicane, overpass, dirt construction zone, back-alley shortcut.
+- **Dusty Canyon Run**: dirt rally, mesa climb, gorge jump, mud-pit shortcut for high-Traction cars.
+- **Neon Highway**: night figure-8 with an elevated freeway, neon rails and lots of boost pads.
+
+To add a track, copy a file in `src/server/Tracks/`, change the control `Points`
+(each Vector3's Y is road height) and add its name to `TRACK_ORDER` in `RaceManager.luau`.
+Track features are placed by "control point + fraction" (e.g. `At = 4.5` is halfway
+between points 4 and 5).
 
 ## Setup (one time)
 
@@ -46,10 +76,11 @@ Before going live, set `Config.Race.MinPlayers = 2`.
 
 ## Tuning ideas
 
-- Car feel: `MaxSpeed`, `Accel`, `Handling` (turn rate), `Grip` (low = drifty) in `Config.Cars`.
-- New track shape: change the radius formula in `TrackBuilder.build()`
-  (`r = R * (1 + 0.22*sin(3t) + 0.12*cos(2t))`). Bigger multipliers = twistier track.
-- New power-up: add an entry to `Config.PowerUps` + `Config.PowerUpOrder`, then a
+- Cars: edit `Stats` in `Cars.luau` (0–10). Physics formulas are in `Stats.derive`.
+- New car: copy an entry in `Cars.luau`, give it a new `Id`, and build it with the
+  `d.block / d.wedge / d.cyl / d.wheels` helpers documented at the top of the file.
+- Drift feel: `Config.Drift` (tier times, boost lengths). Boost pads: `Config.BoostPad`.
+- New power-up: add to `Config.PowerUps` + `Config.PowerUpOrder`, then a
   `handlers.YourId` function in `PowerUps.luau`.
 
 ## Monetization
@@ -61,13 +92,13 @@ Create a game pass and developer products on the Creator Dashboard, then put the
 ## Custom car models
 
 The physics never touch the visual body, so you can swap any model in without changing
-handling. Put a **Model** named exactly like a car Id (`Beater`, `Tuner`, `Muscle`,
-`Supercar`, `Hypercar`) in `ReplicatedStorage.CarModels` and it replaces the blocky body.
+handling. Put a **Model** named exactly like a car Id (see `Cars.luau`, e.g. `Beater`, `GoKart`,
+`Monster`) in `ReplicatedStorage.CarModels` and it replaces the brick body.
 
 Model requirements:
 - Faces **-Z** (Roblox's "front"; the Front face of a part points that way).
-- Pivot at the centre of the car, about 6 × 11 studs footprint. Set a `YOffset` number
-  attribute on the model to raise or lower it.
+- Pivot at the centre of the car **on the ground**, sized to the car's `d.hitbox`.
+  Set a `YOffset` number attribute on the model to raise or lower it.
 - Optional: a `Stealable` folder of parts (spoiler, bumpers…) that Steal Part can rip off.
 - Any scripts inside are deleted automatically (free models can contain backdoors).
 

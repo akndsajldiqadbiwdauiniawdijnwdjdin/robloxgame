@@ -1,6 +1,7 @@
 -- Server-side garage: every purchase is validated here, never trusted from the client.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Cars = require(ReplicatedStorage.Shared.Cars)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local PlayerData = require(script.Parent.PlayerData)
@@ -17,7 +18,7 @@ end
 local actions = {}
 
 function actions.BuyCar(data, id)
-	local car = Config.CarsById[id]
+	local car = Cars.ById[id]
 	if not car then
 		return false, "Unknown car"
 	end
@@ -34,7 +35,7 @@ function actions.BuyCar(data, id)
 end
 
 function actions.Equip(data, id)
-	local car = Config.CarsById[id]
+	local car = Cars.ById[id]
 	if not (car and data.OwnedCars[id]) then
 		return false, "You don't own that car"
 	end

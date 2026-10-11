@@ -31,13 +31,18 @@ local function notify(player: Player, text: string)
 	Remotes.Notify:FireClient(player, text, 2.5)
 end
 
+-- Heavy cars (high Weight stat) get stunned for less time and thrown less far.
+local function knockbackScale(racer): number
+	return racer.Car:GetAttribute("KnockbackScale") or 1
+end
+
 local function stun(racer, duration: number)
 	local current = racer.Car:GetAttribute("StunnedUntil") or 0
-	racer.Car:SetAttribute("StunnedUntil", math.max(current, now() + duration))
+	racer.Car:SetAttribute("StunnedUntil", math.max(current, now() + duration * knockbackScale(racer)))
 end
 
 local function launch(racer, velocity: Vector3)
-	Remotes.Effect:FireClient(racer.Player, "Launch", velocity)
+	Remotes.Effect:FireClient(racer.Player, "Launch", velocity * knockbackScale(racer))
 end
 
 local function isStunned(racer): boolean
@@ -234,7 +239,8 @@ local function moveStealablePart(from, to): string?
 	end
 	local trophies = to.Car:GetAttribute("Trophies") or 0
 	to.Car:SetAttribute("Trophies", trophies + 1)
-	part.CFrame = to.Chassis.CFrame * CFrame.new(0, 2.6 + trophies * 0.7, 1) * CFrame.Angles(0, math.rad(trophies * 35), 0)
+	local roof = to.Car:GetAttribute("RoofY") - to.Car:GetAttribute("HalfHeight")
+	part.CFrame = to.Chassis.CFrame * CFrame.new(0, roof + trophies * 0.7, 1) * CFrame.Angles(0, math.rad(trophies * 35), 0)
 	CarBuilder.weld(part, to.Chassis)
 	part.Parent = destination
 	return part.Name
@@ -289,7 +295,7 @@ function PowerUps.update(race)
 		if t >= pickup.ReadyAt then
 			pickup.Part.Transparency = 0.15
 			for _, racer in race.Ordered do
-				if racer.Active and not racer.PowerUp and flatDistance(racer.Chassis.Position, pickup.Position) < 9 then
+				if racer.Active and not racer.PowerUp and (racer.Chassis.Position - pickup.Position).Magnitude < 10 then
 					local id = PowerUps.roll(race, racer)
 					PowerUps.give(racer, id)
 					local info = Config.PowerUps[id]

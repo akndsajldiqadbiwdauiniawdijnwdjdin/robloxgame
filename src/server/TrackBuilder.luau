@@ -1,29 +1,115 @@
--- Builds the whole race track from code, so the place works with an empty baseplate.
--- The track is a wobbly closed loop; swap the shape formula in build() to make new tracks.
+-- Builds a track from a definition in server/Tracks. The road follows a smooth closed
+-- curve through the definition's control Points (each Vector3's Y is the road height).
+--
+-- Track positions are written as "control point index + fraction": 4.5 means halfway
+-- between control point 4 and 5. Sections, gaps, pads, ramps etc. all use that.
+--
+-- Surfaces (Surface attribute, read by the driving script):
+--   Road  - full speed          Dirt - nearly full speed, slidier
+--   Offroad - slowed by low Traction (grass, sand, ground)
+--   Mud   - very slow unless your Traction is high
+local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local TrackBuilder = {}
 
-local ROAD_TOP = 1 -- y of the driving surface
-local ASPHALT = Color3.fromRGB(45, 45, 50)
-local CURB_RED = Color3.fromRGB(200, 30, 30)
-local CURB_WHITE = Color3.fromRGB(235, 235, 235)
+local SURFACE_LOOKS = {
+	Road = { Material = Enum.Material.Asphalt, Color = Color3.fromRGB(45, 45, 50) },
+	Dirt = { Material = Enum.Material.Ground, Color = Color3.fromRGB(150, 105, 65) },
+	Offroad = { Material = Enum.Material.Grass, Color = Color3.fromRGB(80, 140, 60) },
+	Mud = { Material = Enum.Material.Mud, Color = Color3.fromRGB(85, 60, 40) },
+}
+local CURB_RED = Color3.fromRGB(210, 35, 35)
+local CURB_WHITE = Color3.fromRGB(240, 240, 240)
 
-local function makePart(parent: Instance, props)
-	local part = Instance.new("Part")
+local function catmullRom(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: number): Vector3
+	local t2, t3 = t * t, t * t * t
+	return 0.5 * ((2 * p1) + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3)
+end
+
+local function inRange(u: number, range): boolean
+	if range.From <= range.To then
+		return u >= range.From and u <= range.To
+	end
+	return u >= range.From or u <= range.To -- wraps past the start line
+end
+
+local function angleBetween(u: Vector3, v: Vector3): number
+	if u.Magnitude < 1e-3 or v.Magnitude < 1e-3 then
+		return 0
+	end
+	return math.acos(math.clamp(u.Unit:Dot(v.Unit), -1, 1))
+end
+
+local function rightOf(forward: Vector3): Vector3
+	local flat = Vector3.new(forward.X, 0, forward.Z)
+	if flat.Magnitude < 1e-3 then
+		return Vector3.xAxis
+	end
+	flat = flat.Unit
+	return Vector3.new(-flat.Z, 0, flat.X)
+end
+
+local function sampleCurve(points, closed: boolean, spacing: number)
+	local samples = {}
+	local n = #points
+	local function get(i)
+		if closed then
+			return points[(i - 1) % n + 1]
+		end
+		return points[math.clamp(i, 1, n)]
+	end
+	local last = if closed then n else n - 1
+	for i = 1, last do
+		local p0, p1, p2, p3 = get(i - 1), get(i), get(i + 1), get(i + 2)
+		local steps = math.max(2, math.ceil((p2 - p1).Magnitude / spacing))
+		for s = 0, steps - 1 do
+			local t = s / steps
+			local position = catmullRom(p0, p1, p2, p3, t)
+			position = Vector3.new(position.X, math.max(position.Y, 1), position.Z)
+			table.insert(samples, { Position = position, U = i + t })
+		end
+	end
+	if not closed then
+		table.insert(samples, { Position = points[n], U = n })
+	end
+	local count = #samples
+	for i, sample in samples do
+		local nextSample = samples[if closed then i % count + 1 else math.min(i + 1, count)]
+		local previous = samples[if closed then (i - 2) % count + 1 else math.max(i - 1, 1)]
+		local forward = nextSample.Position - sample.Position
+		if forward.Magnitude < 1e-3 then
+			forward = sample.Position - previous.Position
+		end
+		sample.Forward = forward.Unit
+		sample.Right = rightOf(sample.Forward)
+	end
+	return samples
+end
+
+local function newPart(parent: Instance, props)
+	local part = Instance.new(props.ClassName or "Part")
+	props.ClassName = nil
 	part.Anchored = true
 	part.TopSurface = Enum.SurfaceType.Smooth
 	part.BottomSurface = Enum.SurfaceType.Smooth
+	local attributes = props.Attributes
+	props.Attributes = nil
 	for key, value in props do
 		part[key] = value
+	end
+	if attributes then
+		for key, value in attributes do
+			part:SetAttribute(key, value)
+		end
 	end
 	part.Parent = parent
 	return part
 end
 
-local function addSign(part: BasePart, text: string)
+local function addSign(part: BasePart, text: string, color: Color3?)
 	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
 		local gui = Instance.new("SurfaceGui")
 		gui.Face = face
@@ -35,18 +121,109 @@ local function addSign(part: BasePart, text: string)
 		label.Text = text
 		label.TextScaled = true
 		label.Font = Enum.Font.GothamBlack
-		label.TextColor3 = Color3.new(1, 1, 1)
+		label.TextColor3 = color or Color3.new(1, 1, 1)
 		label.Parent = gui
 		gui.Parent = part
 	end
 end
+TrackBuilder.addSign = addSign
 
-local function rightOf(forward: Vector3): Vector3
-	return Vector3.new(-forward.Z, 0, forward.X)
+-- Builds a strip of road segments along `samples`. Returns nothing; parts go in `folder`.
+local function buildRoad(folder, samples, closed, width, surfaceAt, isGap, options)
+	local count = #samples
+	local lastIndex = if closed then count else count - 1
+	for i = 1, lastIndex do
+		local a = samples[i]
+		local b = samples[i % count + 1]
+		if not isGap(a.U) then
+			local surface = surfaceAt(a.U)
+			local look = SURFACE_LOOKS[surface]
+			local segment = b.Position - a.Position
+			local length = segment.Magnitude
+
+			-- Extend each piece just enough to cover the outside of the bend.
+			local after = samples[(i + 1) % count + 1]
+			local before = samples[(i - 2) % count + 1]
+			local turn = math.max(angleBetween(a.Forward, after.Position - b.Position), angleBetween(a.Position - before.Position, a.Forward))
+			local extra = width * math.tan(math.min(turn, math.rad(60)) / 2) + 0.4
+
+			local cf = CFrame.lookAt((a.Position + b.Position) / 2, b.Position) * CFrame.new(0, -0.5, 0)
+			newPart(folder, {
+				Name = "Road",
+				Size = Vector3.new(width, 1, length + extra),
+				CFrame = cf,
+				Material = if surface == "Road" and options.RoadMaterial then options.RoadMaterial else look.Material,
+				Color = if surface == "Road" and options.RoadColor then options.RoadColor else look.Color,
+				Attributes = { Surface = surface },
+			})
+
+			if options.Curbs and surface == "Road" then
+				for _, side in { -1, 1 } do
+					newPart(folder, {
+						Name = "Curb",
+						Size = Vector3.new(2, 1.2, length + 1),
+						CFrame = cf * CFrame.new(side * (width / 2 + 1), 0.1, 0),
+						Material = Enum.Material.SmoothPlastic,
+						Color = if i % 2 == 0 then CURB_RED else CURB_WHITE,
+						Attributes = { Surface = "Road" },
+					})
+				end
+			end
+
+			if options.WallAt and options.WallAt(a.U, a.Position.Y) then
+				local wall = options.Wall
+				for _, side in { -1, 1 } do
+					newPart(folder, {
+						Name = "Wall",
+						Size = Vector3.new(1, wall.Height, length + 1),
+						CFrame = cf * CFrame.new(side * (width / 2 + 2.5), wall.Height / 2 + 0.5, 0),
+						Material = wall.Material,
+						Color = wall.Color,
+					})
+					if wall.Neon then
+						newPart(folder, {
+							Name = "WallTrim",
+							Size = Vector3.new(1.2, 0.4, length + 1),
+							CFrame = cf * CFrame.new(side * (width / 2 + 2.5), wall.Height + 0.6, 0),
+							Material = Enum.Material.Neon,
+							Color = wall.Neon,
+							CanCollide = false,
+						})
+					end
+				end
+			end
+
+			-- Hold up raised road: solid fill (canyon) or pillars (highway).
+			local low = math.min(a.Position.Y, b.Position.Y) - 1
+			if options.Support and low > 3 then
+				if options.Support == "Fill" then
+					local flatCenter = (a.Position + b.Position) / 2
+					local flatDir = Vector3.new(segment.X, 0, segment.Z)
+					if flatDir.Magnitude > 0.1 then
+						newPart(folder, {
+							Name = "Fill",
+							Size = Vector3.new(width + 16, low, length + extra),
+							CFrame = CFrame.lookAt(Vector3.new(flatCenter.X, low / 2, flatCenter.Z), Vector3.new(flatCenter.X, low / 2, flatCenter.Z) + flatDir),
+							Material = options.FillMaterial or Enum.Material.Sandstone,
+							Color = options.FillColor or Color3.fromRGB(190, 120, 70),
+							Attributes = { Surface = "Offroad" },
+						})
+					end
+				elseif options.Support == "Pillars" and i % 5 == 0 then
+					newPart(folder, {
+						Name = "Pillar",
+						Size = Vector3.new(6, low, 6),
+						CFrame = CFrame.new(a.Position.X, low / 2, a.Position.Z),
+						Material = Enum.Material.Concrete,
+						Color = options.PillarColor or Color3.fromRGB(110, 110, 120),
+					})
+				end
+			end
+		end
+	end
 end
 
-function TrackBuilder.build()
-	local cfg = Config.Track
+function TrackBuilder.build(def)
 	local existing = workspace:FindFirstChild("Track")
 	if existing then
 		existing:Destroy()
@@ -55,164 +232,260 @@ function TrackBuilder.build()
 	folder.Name = "Track"
 	folder.Parent = workspace
 
-	local R = cfg.BaseRadius
-	local W = cfg.RoadWidth
-	local N = cfg.Samples
+	local width = def.Width or Config.Track.DefaultWidth
+	local spacing = Config.Track.SampleSpacing
+	local samples = sampleCurve(def.Points, true, spacing)
+	local count = #samples
 
-	makePart(folder, {
-		Name = "Ground",
-		Size = Vector3.new(R * 3.2, 2, R * 3.2),
-		CFrame = CFrame.new(0, -1, 0),
-		Material = Enum.Material.Grass,
-		Color = Color3.fromRGB(70, 130, 60),
-	})
-
-	-- Sample the loop shape.
-	local points = table.create(N)
-	for i = 1, N do
-		local t = (i - 1) / N * math.pi * 2
-		local r = R * (1 + 0.22 * math.sin(3 * t) + 0.12 * math.cos(2 * t))
-		points[i] = Vector3.new(math.cos(t) * r, ROAD_TOP, math.sin(t) * r * 0.75)
-	end
-	local function wrap(i: number): number
-		return (i - 1) % N + 1
-	end
-	local function direction(i: number): Vector3
-		return (points[wrap(i + 1)] - points[wrap(i)]).Unit
+	-- Lighting / atmosphere.
+	for key, value in def.Lighting or {} do
+		Lighting[key] = value
 	end
 
-	-- Road + curbs.
-	local half = Vector3.new(0, 0.5, 0)
-	for i, p in points do
-		local q = points[wrap(i + 1)]
-		local length = (q - p).Magnitude
-		local cf = CFrame.lookAt((p + q) / 2 - half, q - half)
-		local road = makePart(folder, {
-			Name = "Road",
-			Size = Vector3.new(W, 1, length + W * 0.35), -- overlap hides gaps on bends
-			CFrame = cf,
-			Material = Enum.Material.Asphalt,
-			Color = ASPHALT,
-		})
-		road:SetAttribute("Road", true)
+	local function surfaceAt(u: number): string
+		for _, section in def.Sections or {} do
+			if inRange(u, section) then
+				return section.Surface
+			end
+		end
+		return def.Surface or "Road"
+	end
+	local function isGap(u: number): boolean
+		for _, gap in def.Gaps or {} do
+			if inRange(u, gap) then
+				return true
+			end
+		end
+		return false
+	end
+	local function sampleIndexAt(u: number): number
+		local best, bestDiff = 1, math.huge
+		for i, sample in samples do
+			local diff = math.abs(sample.U - u)
+			if diff < bestDiff then
+				best, bestDiff = i, diff
+			end
+		end
+		return best
+	end
 
-		for _, side in { -1, 1 } do
-			local curb = makePart(folder, {
-				Name = "Curb",
-				Size = Vector3.new(2, 1.2, length + 1),
-				CFrame = cf * CFrame.new(side * (W / 2 + 1), 0.1, 0),
-				Material = Enum.Material.SmoothPlastic,
-				Color = if i % 2 == 0 then CURB_RED else CURB_WHITE,
+	local wall = def.Walls
+	local roadOptions = {
+		RoadMaterial = def.RoadMaterial,
+		RoadColor = def.RoadColor,
+		Curbs = def.Curbs ~= false,
+		Support = def.Support,
+		FillMaterial = def.FillMaterial,
+		FillColor = def.FillColor,
+		PillarColor = def.PillarColor,
+		Wall = wall,
+		WallAt = wall and function(u, y)
+			if wall.AboveHeight and y > wall.AboveHeight then
+				return true
+			end
+			for _, range in wall.Ranges or {} do
+				if inRange(u, range) then
+					return true
+				end
+			end
+			return false
+		end,
+	}
+	buildRoad(folder, samples, true, width, surfaceAt, isGap, roadOptions)
+
+	-- Shortcuts: open strips off the main road.
+	local clearPaths = { samples }
+	for _, shortcut in def.Shortcuts or {} do
+		local path = sampleCurve(shortcut.Points, false, spacing)
+		buildRoad(folder, path, false, shortcut.Width, function()
+			return shortcut.Surface
+		end, function()
+			return false
+		end, { Curbs = false })
+		table.insert(clearPaths, path)
+	end
+
+	-- Ground (tiled: a single part can't be bigger than 2048 studs).
+	local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
+	for _, sample in samples do
+		minX, maxX = math.min(minX, sample.Position.X), math.max(maxX, sample.Position.X)
+		minZ, maxZ = math.min(minZ, sample.Position.Z), math.max(maxZ, sample.Position.Z)
+	end
+	local margin = 450
+	local ground = def.Ground or {}
+	local tile = 1000
+	for x = minX - margin, maxX + margin, tile do
+		for z = minZ - margin, maxZ + margin, tile do
+			newPart(folder, {
+				Name = "Ground",
+				Size = Vector3.new(tile, 2, tile),
+				CFrame = CFrame.new(x + tile / 2, -1, z + tile / 2),
+				Material = ground.Material or Enum.Material.Grass,
+				Color = ground.Color or Color3.fromRGB(80, 140, 60),
+				Attributes = { Surface = ground.Surface or "Offroad" },
 			})
-			curb:SetAttribute("Road", true)
 		end
 	end
 
-	-- Checkpoints (checkpoint 1 is the start/finish line).
-	local checkpoints = {}
-	for i = 1, N, cfg.CheckpointEvery do
-		table.insert(checkpoints, { Position = points[i], Forward = direction(i), Sample = i })
-	end
-
-	-- Start/finish gate.
-	local startCf = CFrame.lookAt(points[1], points[1] + direction(1))
-	makePart(folder, {
+	-- Start/finish gate at sample 1.
+	local start = samples[1]
+	local startCf = CFrame.lookAt(start.Position, start.Position + start.Forward)
+	newPart(folder, {
 		Name = "StartLine",
-		Size = Vector3.new(W, 0.1, 4),
+		Size = Vector3.new(width, 0.1, 4),
 		CFrame = startCf * CFrame.new(0, 0.05, 0),
 		Material = Enum.Material.Neon,
 		Color = CURB_WHITE,
 		CanCollide = false,
+		Attributes = { Surface = "Road" },
 	})
 	for _, side in { -1, 1 } do
-		makePart(folder, {
+		newPart(folder, {
 			Name = "GatePillar",
 			Size = Vector3.new(3, 24, 3),
-			CFrame = startCf * CFrame.new(side * (W / 2 + 4), 12, 0),
+			CFrame = startCf * CFrame.new(side * (width / 2 + 5), 12, 0),
 			Material = Enum.Material.Metal,
 			Color = Color3.fromRGB(30, 30, 30),
 		})
 	end
-	local banner = makePart(folder, {
+	local banner = newPart(folder, {
 		Name = "GateBanner",
-		Size = Vector3.new(W + 11, 6, 2),
+		Size = Vector3.new(width + 13, 6, 2),
 		CFrame = startCf * CFrame.new(0, 25, 0),
 		Material = Enum.Material.Neon,
-		Color = Color3.fromRGB(255, 80, 0),
+		Color = def.BannerColor or Color3.fromRGB(255, 80, 0),
 	})
-	addSign(banner, "ILLEGAL RACING")
+	addSign(banner, string.upper(def.Name))
 
-	-- Power-up boxes: a row of three shortly after some checkpoints.
-	local pickups = {}
-	for _, cpIndex in { 3, 6, 9 } do
-		local cp = checkpoints[cpIndex]
-		if cp then
-			local i = wrap(cp.Sample + 2)
-			local p, right = points[i], rightOf(direction(i))
-			for _, offset in { -W * 0.3, 0, W * 0.3 } do
-				local position = p + right * offset + Vector3.new(0, 3, 0)
-				local box = makePart(folder, {
-					Name = "PowerUpBox",
-					Size = Vector3.new(4, 4, 4),
-					CFrame = CFrame.new(position) * CFrame.Angles(math.rad(45), math.rad(45), 0),
-					Material = Enum.Material.Neon,
-					Color = Color3.fromRGB(255, 170, 0),
-					Transparency = 0.15,
-					CanCollide = false,
-				})
-				table.insert(pickups, { Part = box, Position = position, ReadyAt = 0 })
-			end
+	local function sampleCFrame(index: number): CFrame
+		local sample = samples[index]
+		return CFrame.lookAt(sample.Position, sample.Position + sample.Forward)
+	end
+
+	-- Boost pads (dash panels).
+	for _, pad in def.BoostPads or {} do
+		local cf = sampleCFrame(sampleIndexAt(pad.At)) * CFrame.new(pad.Offset or 0, 0.06, 0)
+		local panel = newPart(folder, {
+			Name = "BoostPad",
+			Size = Vector3.new(pad.Width or 12, 0.12, 10),
+			CFrame = cf,
+			Material = Enum.Material.Neon,
+			Color = Color3.fromRGB(255, 200, 0),
+			CanCollide = false,
+			Attributes = { BoostPad = true, Surface = "Road" },
+		})
+		for k = -1, 1 do
+			newPart(folder, {
+				Name = "Chevron",
+				Size = Vector3.new((pad.Width or 12) * 0.6, 0.14, 1),
+				CFrame = panel.CFrame * CFrame.new(0, 0.02, k * 3),
+				Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(255, 90, 0),
+				CanCollide = false,
+				CanQuery = false,
+			})
 		end
 	end
 
-	-- Jump ramps on the left lane (risky but fun).
-	for _, fraction in { 0.3, 0.72 } do
-		local i = math.floor(N * fraction)
-		local forward = direction(i)
-		local angle, length, thickness = math.rad(12), 26, 1
-		local center = points[i]
-			- rightOf(forward) * (W * 0.22)
-			+ Vector3.new(0, (length / 2) * math.sin(angle) - (thickness / 2) * math.cos(angle), 0)
-		local ramp = makePart(folder, {
+	-- Jump ramps. Tilted so the back edge is flush with the road.
+	for _, ramp in def.Ramps or {} do
+		local angle = math.rad(ramp.Angle or 12)
+		local length = ramp.Length or 24
+		local thickness = 1
+		local cf = sampleCFrame(sampleIndexAt(ramp.At))
+			* CFrame.new(ramp.Offset or 0, length / 2 * math.sin(angle) - thickness / 2 * math.cos(angle), 0)
+			* CFrame.Angles(angle, 0, 0)
+		newPart(folder, {
 			Name = "Ramp",
-			Size = Vector3.new(W * 0.4, thickness, length),
-			-- Tilts the front edge up, so the back edge sits flush with the road.
-			CFrame = CFrame.lookAt(center, center + forward) * CFrame.Angles(angle, 0, 0),
+			Size = Vector3.new(ramp.Width or width * 0.4, thickness, length),
+			CFrame = cf,
 			Material = Enum.Material.DiamondPlate,
-			Color = Color3.fromRGB(255, 200, 0),
+			Color = ramp.Color or Color3.fromRGB(255, 200, 0),
+			Attributes = { Surface = "Road" },
 		})
-		ramp:SetAttribute("Road", true)
 	end
 
-	-- Lobby spawn in the infield.
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "LobbySpawn"
-	spawn.Anchored = true
-	spawn.Neutral = true
-	spawn.Duration = 0
-	spawn.Size = Vector3.new(16, 1, 16)
-	spawn.CFrame = CFrame.new(0, 0.5, 0)
-	spawn.Material = Enum.Material.Neon
-	spawn.Color = Color3.fromRGB(255, 80, 0)
-	spawn.Parent = folder
+	-- Power-up box rows.
+	local pickups = {}
+	for _, u in def.PickupRows or {} do
+		local sample = samples[sampleIndexAt(u)]
+		for _, offset in { -width * 0.3, 0, width * 0.3 } do
+			local position = sample.Position + sample.Right * offset + Vector3.new(0, 3, 0)
+			local box = newPart(folder, {
+				Name = "PowerUpBox",
+				Size = Vector3.new(4, 4, 4),
+				CFrame = CFrame.new(position) * CFrame.Angles(math.rad(45), math.rad(45), 0),
+				Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(255, 170, 0),
+				Transparency = 0.15,
+				CanCollide = false,
+				CanQuery = false,
+			})
+			table.insert(pickups, { Part = box, Position = position, ReadyAt = 0 })
+		end
+	end
 
-	-- Grid slots follow the road backwards from the start line, two cars per row.
-	local function gridCFrame(slot: number): CFrame
+	-- Scenery API for the track's Decor function.
+	local random = Random.new(def.Seed or 1)
+	local api = {
+		Folder = folder,
+		Samples = samples,
+		Width = width,
+		Random = random,
+	}
+	function api.part(props)
+		return newPart(folder, props)
+	end
+	api.sign = addSign
+	-- True if nothing on any road/shortcut is within `radius` of `position` (flat distance).
+	function api.isClear(position: Vector3, radius: number): boolean
+		for _, path in clearPaths do
+			for _, sample in path do
+				local d = sample.Position - position
+				if Vector3.new(d.X, 0, d.Z).Magnitude < radius + width / 2 + 4 then
+					return false
+				end
+			end
+		end
+		return true
+	end
+	-- Calls fn(position, sample, side) every `step` samples on both sides, `offset` studs
+	-- beyond the road edge.
+	function api.alongTrack(step: number, offset: number, fn)
+		for i = 1, count, step do
+			local sample = samples[i]
+			for _, side in { -1, 1 } do
+				local position = sample.Position + sample.Right * side * (width / 2 + offset)
+				fn(Vector3.new(position.X, 0, position.Z), sample, side)
+			end
+		end
+	end
+	function api.sampleAt(u: number)
+		return samples[sampleIndexAt(u)]
+	end
+	if def.Decor then
+		def.Decor(api)
+	end
+
+	-- Grid slots: two per row, following the road backwards from the start line.
+	local function grid(slot: number): (CFrame, number)
 		local row = (slot - 1) // 2
 		local column = (slot - 1) % 2
-		local i = wrap(1 - (row + 1))
-		local forward = direction(i)
-		local position = points[i]
-			+ rightOf(forward) * (if column == 0 then -W * 0.22 else W * 0.22)
-			+ Vector3.new(0, 1.4, 0)
-		return CFrame.lookAt(position, position + forward)
+		local index = (count - 1 - row * 2) % count + 1
+		local sample = samples[index]
+		local position = sample.Position + sample.Right * (if column == 0 then -width * 0.22 else width * 0.22)
+		return CFrame.lookAt(position, position + sample.Forward), index
 	end
 
 	return {
+		Name = def.Name,
+		Laps = def.Laps or Config.Race.Laps,
 		Folder = folder,
-		Checkpoints = checkpoints,
+		Samples = samples,
+		Width = width,
 		Pickups = pickups,
-		GridCFrame = gridCFrame,
+		Grid = grid,
+		SampleCFrame = sampleCFrame,
 	}
 end
 

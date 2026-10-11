@@ -1,12 +1,17 @@
--- Race loop: Intermission -> Countdown -> Racing -> Results -> repeat.
--- Public state lives in workspace attributes (RaceState, StateEndsAt, RacerCount) and
--- player attributes (Place, Lap, PowerUp) so the client HUD can just read them.
+-- Race loop: Intermission -> Countdown -> Racing -> Results -> next track.
+-- Public state lives in workspace attributes (RaceState, StateEndsAt, RacerCount,
+-- TrackName, Laps) and player attributes (Place, Lap, PowerUp) for the HUD.
+--
+-- Progress: each racer has a Sample (index along the track's centre line). Every tick it
+-- can only move FORWARD to the nearest sample within Config.Track.ProgressSearch, so
+-- shortcuts work but driving backwards over the line never counts.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local CarBuilder = require(script.Parent.CarBuilder)
+local Lobby = require(script.Parent.Lobby)
 local PlayerData = require(script.Parent.PlayerData)
 local PowerUps = require(script.Parent.PowerUps)
 local TrackBuilder = require(script.Parent.TrackBuilder)
@@ -14,6 +19,9 @@ local TrackBuilder = require(script.Parent.TrackBuilder)
 local RaceManager = {}
 
 local RACE = Config.Race
+local TRACK = Config.Track
+local TRACK_ORDER = { "Downtown", "Canyon", "NeonHighway" }
+
 local track
 local carsFolder: Folder
 local currentRace -- nil between races
@@ -53,16 +61,16 @@ local function markOut(racer)
 end
 
 local function updateStandings(race)
-	local checkpointCount = #track.Checkpoints
+	local samples = track.Samples
+	local count = #samples
 	for _, racer in race.Ordered do
 		if racer.Finished then
-			racer.Score = 1e9 - racer.FinishPlace
+			racer.Score = 1e12 - racer.FinishPlace
 		elseif racer.Out then
-			racer.Score = -1e9
+			racer.Score = -1e12
 		else
-			local passed = (racer.Lap - 1) * checkpointCount + (racer.NextCp - 2) % checkpointCount
-			local nextPosition = track.Checkpoints[racer.NextCp].Position
-			racer.Score = passed * 10000 - flatDistance(racer.Chassis.Position, nextPosition)
+			local nextSample = samples[racer.Sample % count + 1]
+			racer.Score = (racer.Lap * count + racer.Sample) * 1000 - flatDistance(racer.Chassis.Position, nextSample.Position)
 		end
 	end
 	table.sort(race.Ordered, function(a, b)
@@ -72,16 +80,17 @@ local function updateStandings(race)
 		racer.Place = place
 		if racer.Player.Parent then
 			racer.Player:SetAttribute("Place", place)
-			racer.Player:SetAttribute("Lap", math.min(racer.Lap, RACE.Laps))
+			racer.Player:SetAttribute("Lap", math.clamp(racer.Lap, 1, track.Laps))
 		end
 	end
 	workspace:SetAttribute("RacerCount", #race.Ordered)
 end
 
 local function resetCar(racer)
-	local checkpoint = track.Checkpoints[racer.LastCp]
-	local position = checkpoint.Position + Vector3.new(0, 2.6, 0)
-	racer.Car:PivotTo(CFrame.lookAt(position, position + checkpoint.Forward))
+	local sample = track.Samples[racer.Sample]
+	local halfHeight = racer.Car:GetAttribute("HalfHeight")
+	local position = sample.Position + Vector3.new(0, halfHeight + 1.5, 0)
+	racer.Car:PivotTo(CFrame.lookAt(position, position + sample.Forward))
 	Remotes.Effect:FireClient(racer.Player, "Stop")
 end
 
@@ -102,32 +111,49 @@ local function finish(race, racer)
 end
 
 local function updateRacer(race, racer)
-	local humanoid = racer.Humanoid
-	if not racer.Player.Parent or not racer.Chassis.Parent or humanoid.Health <= 0 then
+	if not racer.Player.Parent or not racer.Chassis.Parent or racer.Humanoid.Health <= 0 then
 		markOut(racer)
 		return
 	end
 
+	local samples = track.Samples
+	local count = #samples
 	local position = racer.Chassis.Position
-	if position.Y < -30 then
+
+	-- Fell off the track (gorge, highway edge, out of the world).
+	if position.Y < samples[racer.Sample].Position.Y - TRACK.FallDistance then
 		resetCar(racer)
+		notify(racer.Player, "Whoops! Back on track.", 1.5)
 		return
 	end
 
-	local checkpoints = track.Checkpoints
-	local target = checkpoints[racer.NextCp]
-	if flatDistance(position, target.Position) <= RACE.CheckpointRadius and math.abs(position.Y - target.Position.Y) < 25 then
-		if racer.NextCp == 1 then
-			racer.Lap += 1
-			if racer.Lap > RACE.Laps then
-				finish(race, racer)
-				return
-			end
-			notify(racer.Player, if racer.Lap == RACE.Laps then "FINAL LAP!" else "LAP " .. racer.Lap, 1.5, true)
+	-- Nearest sample ahead (height counts double, so bridges and underpasses don't mix).
+	local bestOffset, bestDistance = nil, track.Width * 1.25
+	for offset = 0, TRACK.ProgressSearch do
+		local sample = samples[(racer.Sample - 1 + offset) % count + 1]
+		local distance = flatDistance(position, sample.Position) + math.abs(position.Y - sample.Position.Y) * 2
+		if distance < bestDistance then
+			bestOffset, bestDistance = offset, distance
 		end
-		racer.LastCp = racer.NextCp
-		racer.NextCp = racer.NextCp % #checkpoints + 1
 	end
+	if not bestOffset or bestOffset == 0 then
+		return
+	end
+
+	local newIndex = racer.Sample + bestOffset
+	if newIndex > count then
+		newIndex -= count
+		racer.Lap += 1
+		if racer.Lap > track.Laps then
+			racer.Sample = newIndex
+			finish(race, racer)
+			return
+		end
+		if racer.Lap > 1 then
+			notify(racer.Player, if racer.Lap == track.Laps then "FINAL LAP!" else "LAP " .. racer.Lap, 1.5, true)
+		end
+	end
+	racer.Sample = newIndex
 end
 
 local function spawnRacers(race, participants)
@@ -137,8 +163,8 @@ local function spawnRacers(race, participants)
 		local data = PlayerData.get(player)
 		if humanoid and humanoid.Health > 0 and data then
 			local slot = #race.Ordered + 1
-			local stats = Config.getCarStats(data.Equipped, data.Upgrades)
-			local car = CarBuilder.build(player, data.Equipped, stats, track.GridCFrame(slot), carsFolder)
+			local ground, sampleIndex = track.Grid(slot)
+			local car = CarBuilder.build(player, data.Equipped, data.Upgrades, ground, carsFolder)
 			local chassis = car.PrimaryPart
 			local seat = car.DriverSeat
 			chassis.Anchored = true -- frozen until the countdown ends
@@ -149,9 +175,8 @@ local function spawnRacers(race, participants)
 				Car = car,
 				Chassis = chassis,
 				Humanoid = humanoid,
-				Lap = 1,
-				NextCp = 2, -- you start on checkpoint 1 (the start line)
-				LastCp = 1,
+				Lap = 0, -- becomes 1 when they cross the start line
+				Sample = sampleIndex,
 				Place = slot,
 				Score = 0,
 				Steals = 0,
@@ -185,7 +210,7 @@ end
 
 local function giveRewards(race)
 	local rewards = Config.Rewards
-	local lines = { "🏆 RESULTS" }
+	local lines = { "🏆 RESULTS — " .. track.Name }
 	for place, racer in race.Ordered do
 		local reward = if racer.Finished then rewards.Placement[place] or rewards.Finish else rewards.DNF
 		reward += racer.Steals * rewards.PerSteal
@@ -274,8 +299,20 @@ local function runRace(race, participants)
 	task.wait(RACE.ResultsTime)
 end
 
+local trackIndex = 0
+local function loadNextTrack()
+	trackIndex = trackIndex % #TRACK_ORDER + 1
+	local def = require(script.Parent.Tracks[TRACK_ORDER[trackIndex]])
+	if track then
+		PowerUps.reset(track) -- clear leftovers from the previous track first
+	end
+	track = TrackBuilder.build(def)
+	workspace:SetAttribute("TrackName", track.Name)
+	workspace:SetAttribute("Laps", track.Laps)
+end
+
 function RaceManager.start()
-	track = TrackBuilder.build()
+	Lobby.build()
 
 	carsFolder = Instance.new("Folder")
 	carsFolder.Name = "RaceCars"
@@ -314,7 +351,12 @@ function RaceManager.start()
 	end)
 
 	task.spawn(function()
+		local needTrack = true
 		while true do
+			if needTrack then
+				loadNextTrack()
+				needTrack = false
+			end
 			setState("Intermission", RACE.IntermissionTime)
 			task.wait(RACE.IntermissionTime)
 
@@ -333,6 +375,7 @@ function RaceManager.start()
 					warn("[RaceManager] Race crashed:", err)
 				end
 				cleanup(race)
+				needTrack = true
 			end
 		end
 	end)
