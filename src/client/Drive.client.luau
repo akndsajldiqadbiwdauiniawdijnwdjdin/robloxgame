@@ -4,7 +4,8 @@
 -- (TopSpeed, Accel, TurnRate, Grip, OffroadFactor, TurboCharge, TurboPower).
 --
 -- DRIFT: hold Space / Shift (gamepad R1/L1, mobile "Drift") while turning. Sparks go
--- blue -> orange -> purple; let go to fire a Mini-Turbo boost.
+-- blue -> orange -> purple; let go to fire a Mini-Turbo boost. Cars (and "Outside" bikes)
+-- swing the back out; "Inside" bikes carve a tight line. Counter-steer to straighten out.
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -183,6 +184,9 @@ RunService.Heartbeat:Connect(function(dt)
 	local accel = car:GetAttribute("Accel")
 	local turnRate = car:GetAttribute("TurnRate")
 	local grip = car:GetAttribute("Grip")
+	if now < (car:GetAttribute("WheelieUntil") or 0) then
+		turnRate *= Config.Abilities.Wheelie.Steer -- front wheel's in the air
+	end
 	local offroad = car:GetAttribute("OffroadFactor")
 	local halfHeight = car:GetAttribute("HalfHeight")
 
@@ -320,7 +324,16 @@ RunService.Heartbeat:Connect(function(dt)
 	elseif state.Drifting then
 		-- into = +1 holding the drift direction, -1 counter-steering (the other key).
 		local into = steerInput * state.DriftDirection
-		if into >= -0.2 then
+		local inside = car:GetAttribute("DriftStyle") == "Inside"
+		if inside and into >= -0.2 then
+			-- Inside drift (bikes): no tail swing; the bike carves a tight line into the
+			-- corner and even tucks in slightly. Charges the Mini-Turbo the same way.
+			yawRate = -state.DriftDirection * turnRate * (0.75 + 0.75 * math.max(into, 0))
+			local inward = state.DriftDirection * newForward * 0.05
+			newSide = moveTowards(sideSpeed, inward, grip * surfaceGrip * 30 * dt)
+			local rush = if now < (car:GetAttribute("TurboRushUntil") or 0) then 3 else 1
+			state.Charge += dt * car:GetAttribute("TurboCharge") * rush
+		elseif into >= -0.2 then
 			-- Holding into the drift (or neutral): tighter turn, charges the Mini-Turbo.
 			yawRate = -state.DriftDirection * turnRate * (0.55 + 0.65 * math.max(into, 0))
 			local outward = -state.DriftDirection * newForward * 0.18

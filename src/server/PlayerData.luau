@@ -49,6 +49,7 @@ local function template()
 		LastDailyClaim = 0,
 		ShopDay = 0, -- daily shop: offers bought today
 		ShopBought = {},
+		BikeDrift = {}, -- [bikeId] = "Inside" | "Outside" (only when changed from the default)
 	}
 end
 
@@ -80,6 +81,7 @@ local function publish(player: Player, data)
 	player:SetAttribute("Cash", data.Cash)
 	player:SetAttribute("Wins", data.Wins)
 	player:SetAttribute("Equipped", data.Equipped)
+	player:SetAttribute("BikeDrift", HttpService:JSONEncode(data.BikeDrift))
 	player:SetAttribute("OwnedCars", HttpService:JSONEncode(data.OwnedCars))
 	player:SetAttribute("Spins", data.Spins)
 	player:SetAttribute("XP", data.XP)

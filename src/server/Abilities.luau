@@ -100,6 +100,37 @@ function handlers.Blink(race, racer)
 	Remotes.Effect:FireClient(racer.Player, "Blink", target)
 end
 
+function handlers.PizzaToss(race, racer)
+	local target = race.Ordered[racer.Place - 1]
+	if not (target and target.Active and PowerUps.flatDistance(target.Chassis.Position, racer.Chassis.Position) <= CFG.PizzaToss.Range) then
+		PowerUps.notify(racer.Player, "🍕 Nobody close enough ahead!")
+		racer.AbilityReadyAt = now() + 2 -- quick retry instead of the full cooldown
+		racer.Player:SetAttribute("AbilityReadyAt", racer.AbilityReadyAt)
+		return
+	end
+	PowerUps.slow(target, racer, CFG.PizzaToss.Slow, CFG.PizzaToss.Time, "🍕 Pizza to the face! (" .. racer.Player.DisplayName .. ")")
+end
+
+function handlers.Wheelie(_, racer)
+	PowerUps.boost(racer, CFG.Wheelie.Boost, CFG.Wheelie.Time)
+	racer.Car:SetAttribute("WheelieUntil", now() + CFG.Wheelie.Time)
+end
+
+function handlers.ChainWhip(race, racer)
+	local right = forwardOf(racer):Cross(Vector3.yAxis)
+	for _, other in othersWithin(race, racer, CFG.ChainWhip.Radius) do
+		local offset = flat(other.Chassis.Position - racer.Chassis.Position)
+		local side = if offset:Dot(right) >= 0 then right else -right
+		PowerUps.hit(other, racer, CFG.ChainWhip.StunTime, side * 40 + Vector3.new(0, 20, 0), "⛓️ Chain whipped by " .. racer.Player.DisplayName .. "!")
+	end
+end
+
+function handlers.LaneSplit(_, racer)
+	PowerUps.boost(racer, CFG.LaneSplit.Boost, CFG.LaneSplit.Time)
+	racer.Car:SetAttribute("ShieldUntil", math.max(racer.Car:GetAttribute("ShieldUntil") or 0, now() + CFG.LaneSplit.Time))
+	PowerUps.notify(racer.Player, "⚡ Lane split!")
+end
+
 -- Starts a race with the ability ready.
 function Abilities.setup(racer, carId: string)
 	local car = Cars.ById[carId] or Cars.List[1]

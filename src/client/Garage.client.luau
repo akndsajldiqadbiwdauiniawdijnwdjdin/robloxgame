@@ -80,6 +80,12 @@ local function owned(): { [string]: boolean }
 	return HttpService:JSONDecode(player:GetAttribute("OwnedCars") or "{}")
 end
 
+local function bikeDrift(car): string
+	local ok, choices = pcall(HttpService.JSONDecode, HttpService, player:GetAttribute("BikeDrift") or "{}")
+	local choice = ok and type(choices) == "table" and choices[car.Id]
+	return if choice == "Inside" or choice == "Outside" then choice else car.Drift
+end
+
 local function upgradeLevels(): { [string]: number }
 	local levels = {}
 	for _, upgrade in Config.Upgrades do
@@ -159,6 +165,9 @@ local descriptionLabel = text({
 })
 local actionButton = text({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 0, Parent = middle }, true)
 corner(10).Parent = actionButton
+-- Motorcycles only: switch between inside and outside drift (saved per bike).
+local driftButton = text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 8), Size = UDim2.fromOffset(170, 34), BackgroundTransparency = 0, BackgroundColor3 = C.Blue, ZIndex = 4, Visible = false, Parent = middle }, true)
+corner(8).Parent = driftButton
 local toast = text({ Position = UDim2.fromOffset(8, 6), Size = UDim2.new(1, -16, 0, 22), FontFace = UI.Font, Text = "", ZIndex = 5, Parent = middle })
 
 -- Right: Mario Kart-style stat panel.
@@ -260,7 +269,7 @@ local function buildCarList()
 			create("UIStroke", { Color = C.Ink, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = card })
 		end
 		create("Frame", { Position = UDim2.fromOffset(6, 8), Size = UDim2.fromOffset(8, 40), BackgroundColor3 = car.Colors.Primary, Parent = card }, { corner(3) })
-		text({ Position = UDim2.fromOffset(22, 6), Size = UDim2.new(1, -30, 0, 24), Text = car.Name, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
+		text({ Position = UDim2.fromOffset(22, 6), Size = UDim2.new(1, -30, 0, 24), Text = (if car.Bike then "🏍️ " else "") .. car.Name, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
 		local status, color
 		if car.Id == equipped then
 			status, color = "EQUIPPED", Color3.fromRGB(20, 150, 80)
@@ -334,6 +343,12 @@ function refresh()
 	nameLabel.Text = car.Name
 	local ability = car.Ability
 	descriptionLabel.Text = string.format("%s\n%s %s (%ds cooldown): %s", car.Description, ability.Icon, ability.Name, ability.Cooldown, ability.Description)
+	driftButton.Visible = car.Bike == true and tab == "Cars"
+	if car.Bike then
+		local style = bikeDrift(car)
+		driftButton.Text = (if style == "Inside" then "↘ INSIDE" else "↗ OUTSIDE") .. " DRIFT"
+		driftButton.BackgroundColor3 = if style == "Inside" then C.Blue else Color3.fromRGB(230, 120, 20)
+	end
 	setPreview(car)
 	updateStats(car)
 end
@@ -349,6 +364,12 @@ actionButton.Activated:Connect(function()
 		return
 	end
 	request(if owned()[car.Id] then "Equip" else "BuyCar", car.Id)
+end)
+driftButton.Activated:Connect(function()
+	local car = Cars.ById[selectedId]
+	if car and car.Bike then
+		request("BikeDrift", car.Id)
+	end
 end)
 carsTab.Activated:Connect(function()
 	tab = "Cars"
@@ -376,7 +397,7 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt)
 end)
 
 player.AttributeChanged:Connect(function(name)
-	if window.Visible and (name == "Cash" or name == "Equipped" or name == "OwnedCars" or name:sub(1, 4) == "Upg_") then
+	if window.Visible and (name == "Cash" or name == "Equipped" or name == "OwnedCars" or name == "BikeDrift" or name:sub(1, 4) == "Upg_") then
 		refresh()
 	end
 end)

@@ -6,6 +6,8 @@
 --
 -- Custom models: put a Model named after the car Id (e.g. "Muscle") inside
 -- ReplicatedStorage.CarModels and it replaces the brick body. See README.
+local CollectionService = game:GetService("CollectionService")
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CarBody = require(ReplicatedStorage.Shared.CarBody)
@@ -80,9 +82,32 @@ function CarBuilder.build(player: Player, carId: string, upgradeLevels, ground: 
 	model.PrimaryPart = chassis
 
 	applyCustomModel(model, root, car.Id)
+
+	-- Motorcycles: the body hangs off a "LeanRoot" on a Motor6D at ground level, so every
+	-- client can tilt it into turns (client/BikeLean) while the hitbox stays upright.
+	local bodyAnchor = chassis
+	if car.Bike then
+		local leanRoot = Instance.new("Part")
+		leanRoot.Name = "LeanRoot"
+		leanRoot.Size = Vector3.new(0.2, 0.2, 0.2)
+		leanRoot.CFrame = root
+		leanRoot.Transparency = 1
+		leanRoot.CanCollide = false
+		leanRoot.CanTouch = false
+		leanRoot.CanQuery = false
+		leanRoot.Massless = true
+		leanRoot.Parent = model
+		local motor = Instance.new("Motor6D")
+		motor.Name = "Lean"
+		motor.Part0 = chassis
+		motor.Part1 = leanRoot
+		motor.C0 = chassis.CFrame:ToObjectSpace(root)
+		motor.Parent = leanRoot
+		bodyAnchor = leanRoot
+	end
 	for _, descendant in model:GetDescendants() do
-		if descendant:IsA("BasePart") and descendant ~= chassis then
-			weld(descendant, chassis)
+		if descendant:IsA("BasePart") and descendant ~= chassis and descendant ~= bodyAnchor then
+			weld(descendant, bodyAnchor)
 		end
 	end
 
@@ -138,6 +163,18 @@ function CarBuilder.build(player: Player, carId: string, upgradeLevels, ground: 
 	model:SetAttribute("BoostUntil", 0)
 	model:SetAttribute("StunnedUntil", 0)
 	model:SetAttribute("Locked", true)
+
+	-- Drift type: cars always swing out; bikes use the player's choice or their default.
+	local driftStyle = "Outside"
+	if car.Bike then
+		local ok, choices = pcall(HttpService.JSONDecode, HttpService, player:GetAttribute("BikeDrift") or "{}")
+		local choice = ok and type(choices) == "table" and choices[car.Id]
+		driftStyle = if choice == "Inside" or choice == "Outside" then choice else car.Drift
+		model:SetAttribute("IsBike", true)
+		model:SetAttribute("RearZ", hitbox.Z / 2 - 1)
+		CollectionService:AddTag(model, "Bike")
+	end
+	model:SetAttribute("DriftStyle", driftStyle)
 
 	model.Parent = parent
 	return model

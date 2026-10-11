@@ -93,6 +93,17 @@ Config.Abilities = {
 	Stomp = { Radius = 35, StunTime = 1 },
 	Afterburner = { Boost = 1.75, Time = 2.2 },
 	Blink = { Samples = 6 },
+	PizzaToss = { Range = 150, Slow = 0.6, Time = 2.5 },
+	Wheelie = { Boost = 1.3, Time = 3, Steer = 0.7 },
+	ChainWhip = { Radius = 16, StunTime = 0.8 },
+	LaneSplit = { Boost = 1.45, Time = 2.5 },
+}
+
+-- Motorcycles: how far they lean into turns (radians) and how the two drift types feel.
+Config.Bikes = {
+	MaxLean = 0.6,
+	LeanPerTurn = 0.004, -- lean = turn rate x speed x this
+	WheelieAngle = 0.35,
 }
 
 -- Racing XP (levels) per race.

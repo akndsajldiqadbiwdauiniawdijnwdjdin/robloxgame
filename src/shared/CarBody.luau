@@ -85,6 +85,25 @@ function CarBody.spec(car)
 			add("Cylinder", "Hubcap", Vector3.new(0.2, radius, radius), Vector3.new(side * (x + width / 2), radius, z), "Rim")
 		end
 	end
+	-- One wheel in the middle (motorcycles).
+	function d.wheel(z, radius, width)
+		add("Cylinder", "Wheel", Vector3.new(width, radius * 2, radius * 2), Vector3.new(0, radius, z), "Tire")
+		for _, side in { -1, 1 } do
+			add("Cylinder", "Hubcap", Vector3.new(0.2, radius, radius), Vector3.new(side * width / 2, radius, z), "Rim")
+		end
+	end
+	-- A brick rider in a helmet (motorcycles): hips at height y, z = where they sit,
+	-- reaching forward to handlebars at handZ.
+	function d.rider(y, z, handZ)
+		add("Block", "Rider Legs", Vector3.new(1.6, 0.6, 1.6), Vector3.new(0, y, z - 0.6), "Dark")
+		add("Block", "Rider Torso", Vector3.new(1.5, 1.6, 0.9), Vector3.new(0, y + 1.1, z), "Accent", { Rot = Vector3.new(-20, 0, 0) })
+		local armLength = math.max(0.6, z - handZ)
+		for _, side in { -1, 1 } do
+			add("Block", "Rider Arm", Vector3.new(0.45, 0.45, armLength), Vector3.new(side * 0.85, y + 1.3, z - armLength / 2), "Accent")
+		end
+		add("Ball", "Helmet", Vector3.one * 1.3, Vector3.new(0, y + 2.3, z - 0.35), "Primary")
+		add("Block", "Visor", Vector3.new(1, 0.45, 0.3), Vector3.new(0, y + 2.35, z - 0.95), "Glass", { Transparency = 0.1 })
+	end
 	function d.lights(x, y, frontZ, backZ)
 		for _, side in { -1, 1 } do
 			add("Block", "Headlight", Vector3.new(1.2, 0.6, 0.2), Vector3.new(side * x, y, frontZ), "Headlight", { Material = Enum.Material.Neon })

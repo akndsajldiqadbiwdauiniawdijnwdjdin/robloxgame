@@ -346,6 +346,151 @@ Cars.List = {
 			d.block("Canards", 6.9, 0.15, 0.6, 0, 1.0, -5.9, "Accent", { Steal = true })
 		end,
 	},
+	-- Motorcycles --------------------------------------------------------------------------
+	-- Bike = true: narrow, leans into turns. Drift = "Inside" (bike carves a tight line
+	-- into the corner) or "Outside" (the back swings out like a car). Players can switch
+	-- either way in the garage.
+	{
+		Id = "Scooter",
+		Bike = true,
+		Drift = "Inside",
+		Ability = { Id = "PizzaToss", Name = "Pizza Toss", Icon = "🍕", Cooldown = 12, Description = "Fling a hot pizza at the racer right ahead: they slow down for 2.5 seconds." },
+		Name = "Pizza Scooter",
+		Price = 3000,
+		Description = "30 minutes or it's free. Zippy and nimble, but gets knocked around.",
+		Stats = { Speed = 4, Acceleration = 9, Weight = 1, Handling = 7, Traction = 5, MiniTurbo = 8 },
+		Colors = {
+			Primary = Color3.fromRGB(230, 40, 40),
+			Secondary = Color3.fromRGB(245, 245, 240),
+			Accent = Color3.fromRGB(40, 120, 60),
+		},
+		Design = function(d)
+			d.hitbox(2.4, 2.4, 7)
+			d.seat(0, 2.0, 1)
+			d.roof(5.4)
+			d.wheel(-2.5, 0.8, 0.7)
+			d.wheel(2.5, 0.8, 0.7)
+			d.block("Floorboard", 1.6, 0.4, 3.4, 0, 0.9, 0, "Secondary")
+			d.block("Leg Shield", 1.8, 2.2, 0.5, 0, 1.9, -2.0, "Primary", { Rot = Vector3.new(15, 0, 0) })
+			d.block("Fork", 0.3, 1.6, 0.3, 0, 1.3, -2.5, "Chrome")
+			d.block("Handlebar", 2.2, 0.25, 0.25, 0, 3.1, -1.9, "Dark")
+			d.block("Headlight", 0.6, 0.5, 0.2, 0, 2.6, -2.35, "Headlight", { Material = NEON })
+			d.block("Body", 1.8, 1.2, 2.6, 0, 1.6, 1.4, "Primary")
+			d.block("Seat", 1.4, 0.4, 2.2, 0, 2.35, 1.2, "Dark")
+			d.block("Taillight", 0.8, 0.3, 0.2, 0, 1.8, 2.75, "Taillight", { Material = NEON })
+			d.rider(2.8, 0.9, -1.9)
+			d.block("Pizza Box", 1.8, 0.6, 1.8, 0, 2.9, 2.6, "Secondary", { Steal = true })
+			d.block("Pizza Logo", 1, 0.1, 1, 0, 3.22, 2.6, "Primary", { Steal = true })
+		end,
+	},
+	{
+		Id = "DirtBike",
+		Bike = true,
+		Drift = "Outside",
+		Ability = { Id = "Wheelie", Name = "Wheelie", Icon = "🤸", Cooldown = 12, Description = "Pop a wheelie: +30% speed for 3 seconds (steering is a little stiffer)." },
+		Name = "Dirt Bike",
+		Price = 9000,
+		Description = "Knobby tyres eat mud and grass for breakfast.",
+		Stats = { Speed = 5, Acceleration = 7, Weight = 3, Handling = 7, Traction = 9, MiniTurbo = 6 },
+		Colors = {
+			Primary = Color3.fromRGB(255, 120, 0),
+			Secondary = Color3.fromRGB(40, 40, 45),
+			Accent = Color3.fromRGB(30, 90, 200),
+		},
+		Design = function(d)
+			d.hitbox(2.4, 2.6, 8)
+			d.seat(0, 2.4, 0.8)
+			d.roof(6)
+			d.wheel(-3, 1.2, 0.6)
+			d.wheel(3, 1.2, 0.6)
+			d.block("Frame", 0.8, 1.2, 3.4, 0, 1.8, 0, "Secondary")
+			d.block("Engine", 1.4, 1.2, 1.6, 0, 1.3, 0, "Chrome", { Material = METAL })
+			d.block("Tank", 1.6, 0.8, 1.8, 0, 2.6, -0.8, "Primary")
+			d.block("Seat", 1.2, 0.35, 2.6, 0, 2.75, 1.2, "Dark")
+			d.block("Front Fender", 1, 0.25, 1.6, 0, 2.6, -3, "Primary")
+			d.block("Fork", 0.4, 2.2, 0.4, 0, 2.2, -2.6, "Chrome", { Rot = Vector3.new(20, 0, 0) })
+			d.block("Handlebar", 2.4, 0.25, 0.25, 0, 3.4, -2.2, "Dark")
+			d.block("Number Plate", 1.2, 1, 0.2, 0, 2.9, -2.95, "Secondary")
+			d.block("Number", 0.5, 0.6, 0.05, 0, 2.9, -3.08, "Primary", { Material = NEON })
+			d.cyl("Exhaust", 2.4, 0.5, 0.7, 2.0, 2.2, "Chrome", { Rot = Vector3.new(0, 90, 0), Material = METAL })
+			d.block("Taillight", 0.6, 0.3, 0.2, 0, 2.6, 3.9, "Taillight", { Material = NEON })
+			d.rider(3.0, 1.0, -2.2)
+			d.block("Rear Fender", 1, 0.25, 1.8, 0, 2.7, 3, "Primary", { Steal = true })
+		end,
+	},
+	{
+		Id = "Chopper",
+		Bike = true,
+		Drift = "Outside",
+		Ability = { Id = "ChainWhip", Name = "Chain Whip", Icon = "⛓️", Cooldown = 13, Description = "Swing a chain: every racer right next to you gets knocked aside and stunned." },
+		Name = "Outlaw Chopper",
+		Price = 20000,
+		Description = "All chrome, all attitude. Heavy and fast in a straight line.",
+		Stats = { Speed = 8, Acceleration = 3, Weight = 8, Handling = 3, Traction = 6, MiniTurbo = 4 },
+		Colors = {
+			Primary = Color3.fromRGB(20, 20, 25),
+			Secondary = Color3.fromRGB(120, 70, 40),
+			Accent = Color3.fromRGB(200, 30, 30),
+		},
+		Design = function(d)
+			d.hitbox(2.6, 2.6, 10)
+			d.seat(0, 1.9, 1.4)
+			d.roof(5.6)
+			d.wheel(-4, 1.1, 0.6)
+			d.wheel(3.6, 1.3, 1.1)
+			d.block("Frame", 0.6, 0.6, 6, 0, 1.6, 0, "Chrome", { Material = METAL })
+			d.block("Fork", 0.4, 3.6, 0.4, 0, 2.4, -3.3, "Chrome", { Rot = Vector3.new(30, 0, 0), Material = METAL })
+			d.block("Ape Hangers", 2.6, 0.25, 0.25, 0, 4.1, -2.2, "Chrome", { Material = METAL })
+			d.block("Tank", 1.4, 0.8, 2, 0, 2.4, -1.2, "Primary")
+			d.block("Flames", 1.45, 0.3, 1.2, 0, 2.4, -1.4, "Accent", { Material = NEON })
+			d.block("V-Twin", 1.4, 1.4, 1.6, 0, 1.4, -0.6, "Chrome", { Material = METAL })
+			d.block("Seat", 1.6, 0.4, 2, 0, 1.95, 1.2, "Secondary")
+			d.block("Rear Fender", 1.6, 0.3, 2.4, 0, 2.75, 3.6, "Primary")
+			for _, side in { -1, 1 } do
+				d.cyl("Pipe", 4, 0.4, side * 0.9, 1.0, 2.0, "Chrome", { Rot = Vector3.new(0, 90, 0), Material = METAL })
+				d.block("Saddlebag", 0.5, 0.9, 1.4, side * 1.05, 2.3, 3.2, "Secondary")
+			end
+			d.ball("Headlight", 0.8, 0, 3.2, -3.1, "Headlight", { Material = NEON })
+			d.block("Taillight", 0.7, 0.3, 0.2, 0, 2.6, 4.85, "Taillight", { Material = NEON })
+			d.rider(2.4, 1.3, -2.2)
+			d.block("Sissy Bar", 0.3, 2, 0.3, 0, 3.0, 2.4, "Chrome", { Steal = true })
+			d.block("Skull", 0.6, 0.6, 0.2, 0, 3.1, 2.25, "Secondary", { Steal = true })
+		end,
+	},
+	{
+		Id = "SportBike",
+		Bike = true,
+		Drift = "Inside",
+		Ability = { Id = "LaneSplit", Name = "Lane Split", Icon = "⚡", Cooldown = 15, Description = "Thread through traffic: a 2.5-second boost that also blocks the next hit." },
+		Name = "Street Rocket",
+		Price = 30000,
+		Description = "Superbike. Cuts corners on the inside line like a knife.",
+		Stats = { Speed = 9, Acceleration = 5, Weight = 3, Handling = 8, Traction = 3, MiniTurbo = 5 },
+		Colors = {
+			Primary = Color3.fromRGB(0, 200, 120),
+			Secondary = Color3.fromRGB(25, 25, 30),
+			Accent = Color3.fromRGB(240, 240, 240),
+		},
+		Design = function(d)
+			d.hitbox(2.4, 2.4, 8.5)
+			d.seat(0, 2.2, 1)
+			d.roof(5.6)
+			d.wheel(-3.1, 1.05, 0.8)
+			d.wheel(3.1, 1.05, 0.8)
+			d.wedge("Nose Fairing", 1.8, 1.4, 2.6, 0, 1.9, -2.5, "Primary")
+			d.block("Fairing", 1.8, 1.4, 2.2, 0, 1.9, -0.1, "Primary")
+			d.block("Stripe", 1.85, 0.2, 2.2, 0, 2.2, -0.1, "Accent")
+			d.block("Windscreen", 1.4, 0.6, 1, 0, 2.85, -1.0, "Glass", { Rot = Vector3.new(20, 0, 0) })
+			d.block("Tank", 1.6, 0.6, 1.4, 0, 2.9, 0.2, "Secondary")
+			d.block("Seat", 1.2, 0.3, 1.8, 0, 2.75, 1.7, "Dark")
+			d.wedge("Tail", 1.4, 0.8, 2, 0, 2.6, 3.2, "Primary", { Back = true })
+			d.block("Belly", 1.2, 0.6, 2.4, 0, 1.0, 0.3, "Dark")
+			d.block("Headlight", 0.8, 0.4, 0.2, 0, 1.6, -3.85, "Headlight", { Material = NEON })
+			d.block("Taillight", 0.8, 0.3, 0.2, 0, 2.8, 4.2, "Taillight", { Material = NEON })
+			d.rider(2.9, 1.4, -0.9)
+			d.cyl("Exhaust", 2, 0.5, 0.6, 1.4, 2.6, "Chrome", { Rot = Vector3.new(0, 90, 0), Material = METAL, Steal = true })
+		end,
+	},
 }
 
 Cars.ById = {}

@@ -180,6 +180,8 @@ function Lobby.build()
 
 	-- Showroom halls with every car ------------------------------------------------------
 	local perHall = math.ceil(#Cars.List / 2)
+	local spacing = math.min(23, 104 / math.max(perHall - 1, 1)) -- fit them all inside the hall
+	local pedestalSize = math.min(18, spacing - 1)
 	for hall, side in { -1, 1 } do
 		local cx = side * 117
 		part({ Name = "HallBack", Size = Vector3.new(2, 22, 120), CFrame = at(side * 137, 11, 20), Material = Enum.Material.Brick, Color = CREAM })
@@ -194,12 +196,12 @@ function Lobby.build()
 		for slot = 1, perHall do
 			local car = Cars.List[(hall - 1) * perHall + slot]
 			if car then
-				local z = -22 + (slot - 1) * 23
+				local z = -32 + (slot - 1) * spacing
 				local position = O + Vector3.new(cx - side * 4, 0, z)
 				local pedestal = part({
 					Name = "Pedestal",
 					Shape = Enum.PartType.Cylinder,
-					Size = Vector3.new(0.6, 18, 18),
+					Size = Vector3.new(0.6, pedestalSize, pedestalSize),
 					CFrame = CFrame.new(position + Vector3.new(0, 0.6, 0)) * CFrame.Angles(0, 0, math.rad(90)),
 					Material = Enum.Material.Neon,
 					Color = car.Colors.Primary,

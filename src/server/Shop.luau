@@ -72,6 +72,18 @@ function actions.Equip(_, data, id)
 	return true, car.Name .. " equipped (next race)"
 end
 
+-- Motorcycles: flip between inside and outside drift.
+function actions.BikeDrift(_, data, id)
+	local car = Cars.ById[id]
+	if not (car and car.Bike) then
+		return false, "Only motorcycles can change drift type"
+	end
+	local current = data.BikeDrift[id] or car.Drift
+	local new = if current == "Inside" then "Outside" else "Inside"
+	data.BikeDrift[id] = if new == car.Drift then nil else new
+	return true, car.Name .. ": " .. string.upper(new) .. " drift"
+end
+
 function actions.Upgrade(_, data, id)
 	local upgrade = upgradesById[id]
 	if not upgrade then

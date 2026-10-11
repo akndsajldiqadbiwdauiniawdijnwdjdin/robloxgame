@@ -12,7 +12,7 @@ Everything is built from code (tracks, cars, lobby, UI), so it runs in an empty 
 | Key | Action |
 | --- | --- |
 | WASD / arrows / gamepad / mobile stick | Drive |
-| Space or Shift (hold while turning) | Drift → Mini-Turbo |
+| Space or Shift (hold while turning) | Drift → Mini-Turbo (press the other way to straighten out; that part doesn't charge) |
 | **Q** (or 1) | Car ability |
 | **E** (or 2) | Use item |
 | R | Respawn at last checkpoint |
@@ -23,7 +23,7 @@ Everything is built from code (tracks, cars, lobby, UI), so it runs in an empty 
 | File | Does |
 | --- | --- |
 | `src/shared/Config.luau` | **All tuning**: race rules, rewards, drift, items, abilities, XP, spin, store, passes, audio |
-| `src/shared/Cars.luau` | 10 cars: price, 6 stats, signature ability, brick design |
+| `src/shared/Cars.luau` | 10 cars + 4 motorcycles: price, 6 stats, signature ability, brick design |
 | `src/shared/Items.luau` | 14 items with rarities (Common/Rare/Epic/Mythic), starter items, loadout size |
 | `src/shared/Progression.luau` | Levels, 7-day daily reward, item rolls + pity, rotating daily shop |
 | `src/shared/Emotes.luau` | Lobby emotes |
@@ -33,14 +33,15 @@ Everything is built from code (tracks, cars, lobby, UI), so it runs in an empty 
 | `src/server/TrackBuilder.luau` | Builds tracks: road, borders, barriers, tunnels, grandstands, scenery |
 | `src/server/RaceManager.luau` | Voting, race loop, checkpoints + rescue, awards, XP |
 | `src/server/PowerUps.luau` | Item boxes (from your loadout) and all 14 item effects |
-| `src/server/Abilities.luau` | The 10 car abilities |
+| `src/server/Abilities.luau` | The 14 vehicle abilities |
 | `src/server/Shop.luau` | Cars, upgrades, daily shop, item rolls, loadout, daily reward |
 | `src/server/Spin.luau` / `Monetization.luau` | Daily spin; Robux products + passes |
 | `src/server/Lobby.luau` | Lobby plaza, showroom, shop counter, spin booth |
 | `src/client/Hud.client.luau` | Race HUD, voting, results + awards, rescue fade |
 | `src/client/Menu.client.luau` | Shop (Daily Shop / Item Rolls / Loadout / Passes), Daily Reward, emotes |
 | `src/client/Garage.client.luau` | Cars, stats, upgrades |
-| `src/client/Drive.client.luau` | Driving physics, drifting, effects |
+| `src/client/Drive.client.luau` | Driving physics, drifting (inside/outside), effects |
+| `src/client/BikeLean.client.luau` | Motorcycles lean into turns and lift for wheelies |
 | `src/client/Music.client.luau` | Music, engine loop, event sounds |
 
 ### Car abilities (Q)
@@ -57,6 +58,19 @@ Everything is built from code (tracks, cars, lobby, UI), so it runs in an empty 
 | Monster Truck | Monster Stomp: shockwave |
 | Supercar | Afterburner: massive boost |
 | Hypercar | Blink Drive: teleport forward along the track |
+| 🏍️ Pizza Scooter | Pizza Toss: slows the racer right ahead |
+| 🏍️ Dirt Bike | Wheelie: +30% speed for 3s |
+| 🏍️ Outlaw Chopper | Chain Whip: knocks aside everyone next to you |
+| 🏍️ Street Rocket | Lane Split: boost that also blocks the next hit |
+
+### Motorcycles: inside vs outside drift
+
+- **Inside drift** (default on the Scooter and Street Rocket): the bike carves a tight
+  line into the corner instead of swinging its back out. Good for hairpins.
+- **Outside drift** (default on the Dirt Bike and Chopper, and how every car drifts):
+  a wider, sliding arc.
+- Switch any bike either way in the garage with the **INSIDE / OUTSIDE DRIFT** button
+  on its preview. The choice is saved per bike. Lean amounts are in `Config.Bikes`.
 
 ### Items (E): your loadout decides what item boxes give you
 
