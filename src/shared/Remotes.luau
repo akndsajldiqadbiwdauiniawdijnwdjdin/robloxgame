@@ -9,6 +9,8 @@ local DEFINITIONS = {
 	Effect = "RemoteEvent", -- server -> client (kind, value)
 	Shop = "RemoteFunction", -- client -> server (action, id) -> ok, message
 	Vote = "RemoteEvent", -- client -> server (trackId)
+	UseAbility = "RemoteEvent", -- client -> server
+	Results = "RemoteEvent", -- server -> clients (race results + awards)
 	Spin = "RemoteFunction", -- client -> server () -> ok, prizeIndex | message, message
 }
 

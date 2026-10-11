@@ -1,5 +1,5 @@
--- Robux purchases: the 2x Cash game pass and the store's developer products (cash and
--- spin packs). IDs live in Config.Monetization and Config.Store.
+-- Robux purchases: game passes (Config.Passes) and developer products (Config.Store:
+-- coins, spins and item rolls). Owned passes show up as player attributes "Pass_<Key>".
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,8 +9,6 @@ local PlayerData = require(script.Parent.PlayerData)
 
 local Monetization = {}
 
-local PASS_ID = Config.Monetization.DoubleCashPassId
-
 local productsById = {}
 for _, item in Config.Store do
 	if item.ProductId ~= 0 then
@@ -18,25 +16,31 @@ for _, item in Config.Store do
 	end
 end
 
-local function checkPass(player: Player)
-	if PASS_ID == 0 then
-		return
-	end
-	local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, PASS_ID)
-	if ok and owns then
-		player:SetAttribute("DoubleCash", true)
+local function checkPasses(player: Player)
+	for _, pass in Config.Passes do
+		if pass.PassId ~= 0 then
+			local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, pass.PassId)
+			if ok and owns then
+				player:SetAttribute("Pass_" .. pass.Key, true)
+			end
+		end
 	end
 end
 
 function Monetization.init()
-	Players.PlayerAdded:Connect(checkPass)
+	Players.PlayerAdded:Connect(checkPasses)
 	for _, player in Players:GetPlayers() do
-		task.spawn(checkPass, player)
+		task.spawn(checkPasses, player)
 	end
 
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
-		if purchased and passId == PASS_ID then
-			player:SetAttribute("DoubleCash", true)
+		if not purchased then
+			return
+		end
+		for _, pass in Config.Passes do
+			if pass.PassId == passId then
+				player:SetAttribute("Pass_" .. pass.Key, true)
+			end
 		end
 	end)
 
@@ -57,6 +61,8 @@ function Monetization.init()
 				data.Cash += item.Amount
 			elseif item.Kind == "Spins" then
 				data.Spins += item.Amount
+			elseif item.Kind == "Rolls" then
+				data.RollTokens += item.Amount
 			end
 		end)
 		PlayerData.save(player)

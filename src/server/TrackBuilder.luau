@@ -496,8 +496,18 @@ function TrackBuilder.build(def)
 		return newPart(folder, props)
 	end
 	api.sign = addSign
-	-- True if nothing on any road/shortcut is within `radius` of `position` (flat distance).
+	-- Areas taken by set pieces (grandstands...), so scenery doesn't get placed on them.
+	local reserved = {}
+	function api.reserve(position: Vector3, radius: number)
+		table.insert(reserved, { Position = position, Radius = radius })
+	end
+	-- True if nothing on any road/shortcut/set piece is within `radius` of `position`.
 	function api.isClear(position: Vector3, radius: number): boolean
+		for _, area in reserved do
+			if flatDistance(area.Position, position) < radius + area.Radius then
+				return false
+			end
+		end
 		for _, path in clearPaths do
 			for _, sample in path.Samples do
 				if flatDistance(sample.Position, position) < radius + path.Half then
@@ -521,6 +531,90 @@ function TrackBuilder.build(def)
 	function api.sampleAt(u: number)
 		return samples[sampleIndexAt(u)]
 	end
+	local function samplesBetween(fromU: number, toU: number)
+		local list = {}
+		for _, sample in samples do
+			if inRange(sample.U, { From = fromU, To = toU }) then
+				table.insert(list, sample)
+			end
+		end
+		return list
+	end
+
+	-- A roofed tunnel over the road. style "Box" (walls + roof) or "Rings" (neon hoops).
+	function api.tunnel(fromU: number, toU: number, opts)
+		opts = opts or {}
+		local height = opts.Height or 16
+		local half = edge + 1
+		for index, sample in samplesBetween(fromU, toU) do
+			local cf = CFrame.lookAt(sample.Position, sample.Position + sample.Forward)
+			local lift = if index % 2 == 0 then 0.04 else 0
+			if opts.Style == "Rings" then
+				if index % 3 == 0 then
+					for _, piece in {
+						{ Vector3.new(2, height, 2), CFrame.new(-half, height / 2, 0) },
+						{ Vector3.new(2, height, 2), CFrame.new(half, height / 2, 0) },
+						{ Vector3.new(half * 2 + 2, 2, 2), CFrame.new(0, height, 0) },
+					} do
+						newPart(folder, { Name = "TunnelRing", Size = piece[1], CFrame = cf * piece[2], Material = Enum.Material.Neon, Color = opts.Color or Color3.fromRGB(0, 220, 255), CanCollide = false })
+					end
+				end
+			else
+				local length = spacing + 3
+				newPart(folder, { Name = "TunnelRoof", Size = Vector3.new(half * 2 + 6, 3, length), CFrame = cf * CFrame.new(0, height + lift, 0), Material = opts.Material or Enum.Material.Concrete, Color = opts.Color or Color3.fromRGB(120, 120, 125) })
+				-- Walls reach down to the ground so raised tunnels don't float.
+				local drop = math.max(0, sample.Position.Y - groundY)
+				for _, side in { -1, 1 } do
+					newPart(folder, { Name = "TunnelWall", Size = Vector3.new(3 + lift, height + drop, length), CFrame = cf * CFrame.new(side * (half + 1.5), (height - drop) / 2, 0), Material = opts.Material or Enum.Material.Concrete, Color = opts.Color or Color3.fromRGB(120, 120, 125) })
+				end
+				if index % 3 == 0 then
+					local lamp = newPart(folder, { Name = "TunnelLight", Size = Vector3.new(half * 1.2, 0.3, 1), CFrame = cf * CFrame.new(0, height - 1.6, 0), Material = Enum.Material.Neon, Color = opts.LightColor or Color3.fromRGB(255, 230, 170), CanCollide = false })
+					local light = Instance.new("PointLight")
+					light.Range = 26
+					light.Brightness = 1.5
+					light.Color = lamp.Color
+					light.Parent = lamp
+				end
+			end
+		end
+	end
+
+	-- Grandstand full of (blocky) spectators beside the road at track position u.
+	-- baseY lets a stand sit on a pier/platform instead of the ground.
+	function api.grandstand(u: number, side: number, length: number?, roofColor: Color3?, baseY: number?)
+		length = length or 60
+		local sample = api.sampleAt(u)
+		local base = sample.Position + sample.Right * side * (edge + 14)
+		local ground = Vector3.new(base.X, baseY or groundY, base.Z)
+		local cf = CFrame.lookAt(ground, ground - sample.Right * side) -- faces the road
+		api.reserve((cf * CFrame.new(0, 0, 16)).Position, length / 2 + 6)
+		for tier = 0, 3 do
+			newPart(folder, { Name = "Bleacher", Size = Vector3.new(length, 2.5 + tier * 2.5, 5), CFrame = cf * CFrame.new(0, (2.5 + tier * 2.5) / 2, 6 + tier * 5), Material = Enum.Material.Concrete, Color = Color3.fromRGB(150, 150, 155) })
+			for seat = -length / 2 + 2, length / 2 - 2, 3 do
+				if random:NextNumber() < 0.75 then
+					local fan = cf * CFrame.new(seat, 2.5 + tier * 2.5 + 1.5, 6 + tier * 5)
+					newPart(folder, { Name = "Fan", Size = Vector3.new(1.6, 2, 1), CFrame = fan, Material = Enum.Material.SmoothPlastic, Color = Color3.fromHSV(random:NextNumber(), 0.7, 0.9), CanCollide = false })
+					newPart(folder, { Name = "FanHead", Size = Vector3.new(1.2, 1.2, 1.2), CFrame = fan * CFrame.new(0, 1.6, 0), Material = Enum.Material.SmoothPlastic, Color = Color3.fromRGB(255, 210, 160), CanCollide = false })
+				end
+			end
+		end
+		newPart(folder, { Name = "StandRoof", Size = Vector3.new(length + 4, 1, 26), CFrame = cf * CFrame.new(0, 18, 14) * CFrame.Angles(math.rad(-8), 0, 0), Material = Enum.Material.Metal, Color = roofColor or def.BannerColor or Color3.fromRGB(255, 80, 0) })
+		for _, x in { -length / 2, length / 2 } do
+			newPart(folder, { Name = "StandPost", Size = Vector3.new(1.5, 18, 1.5), CFrame = cf * CFrame.new(x, 9, 24), Material = Enum.Material.Metal, Color = Color3.fromRGB(60, 60, 65) })
+		end
+	end
+
+	-- Sponsor arch over the road.
+	function api.arch(u: number, label: string, color: Color3?)
+		local sample = api.sampleAt(u)
+		local cf = CFrame.lookAt(sample.Position, sample.Position + sample.Forward)
+		for _, side in { -1, 1 } do
+			newPart(folder, { Name = "ArchPost", Size = Vector3.new(2.5, 20, 2.5), CFrame = cf * CFrame.new(side * (edge + 2), 10, 0), Material = Enum.Material.Metal, Color = Color3.fromRGB(40, 40, 45) })
+		end
+		local board = newPart(folder, { Name = "ArchSign", Size = Vector3.new(edge * 2 + 6, 5, 1.5), CFrame = cf * CFrame.new(0, 21, 0), Material = Enum.Material.SmoothPlastic, Color = color or Color3.fromRGB(30, 30, 35) })
+		addSign(board, label)
+	end
+
 	if def.Decor then
 		def.Decor(api)
 	end
@@ -542,6 +636,7 @@ function TrackBuilder.build(def)
 		Folder = folder,
 		Samples = samples,
 		Width = width,
+		Edge = edge, -- centre line to the outside of the barrier
 		KillY = def.KillY or (groundY - 40),
 		Pickups = pickups,
 		Shortcuts = shortcutPaths,

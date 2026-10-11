@@ -12,20 +12,22 @@ local Cars = require(Shared:WaitForChild("Cars"))
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Stats = require(Shared:WaitForChild("Stats"))
+local UI = require(Shared:WaitForChild("UI"))
+local C = UI.Colors
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 local WIDTH, HEIGHT = 870, 510
-local NAVY = Color3.fromRGB(14, 28, 44)
-local CARD = Color3.fromRGB(28, 46, 66)
+local NAVY = C.Cream
+local CARD = C.CreamDark
 local TEAL = Color3.fromRGB(24, 104, 124)
 local BAR_BG = Color3.fromRGB(9, 44, 56)
 local YELLOW = Color3.fromRGB(255, 214, 0)
 local BONUS = Color3.fromRGB(255, 140, 0)
-local ORANGE = Color3.fromRGB(255, 120, 0)
-local GREEN = Color3.fromRGB(40, 175, 85)
-local GREY = Color3.fromRGB(85, 90, 100)
+local ORANGE = C.Mint
+local GREEN = C.Mint
+local GREY = C.Line
 
 local function create(className: string, props, children: { Instance }?)
 	local instance = Instance.new(className)
@@ -50,9 +52,9 @@ end
 local function text(props, isButton: boolean?)
 	local defaults = {
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBlack,
-		TextColor3 = Color3.new(1, 1, 1),
-		TextStrokeTransparency = 0.4,
+		FontFace = UI.FontHeavy,
+		TextColor3 = C.Ink,
+		TextStrokeTransparency = 1,
 		TextScaled = true,
 		AutoButtonColor = if isButton then true else nil,
 	}
@@ -71,7 +73,7 @@ local function formatCash(amount: number): string
 			break
 		end
 	end
-	return "$" .. formatted
+	return formatted .. " coins"
 end
 
 local function owned(): { [string]: boolean }
@@ -95,17 +97,7 @@ local gui = create("ScreenGui", {
 	Parent = player:WaitForChild("PlayerGui"),
 })
 
-local openButton = text({
-	Name = "GarageButton",
-	AnchorPoint = Vector2.new(0, 0.5),
-	Position = UDim2.new(0, 12, 0.5, 0),
-	Size = UDim2.new(0, 130, 0, 46),
-	BackgroundTransparency = 0,
-	BackgroundColor3 = ORANGE,
-	Text = "🛠 GARAGE",
-	Parent = gui,
-}, true)
-corner().Parent = openButton
+local openButton = UI.sideButton(player, "GARAGE", "🛠", 1)
 
 local window = create("Frame", {
 	Name = "Window",
@@ -116,16 +108,17 @@ local window = create("Frame", {
 	BackgroundTransparency = 0.04,
 	Visible = false,
 	Parent = gui,
-}, { corner(14), create("UIStroke", { Color = YELLOW, Thickness = 3 }) })
+})
+UI.brackets(window)
 local scale = create("UIScale", { Parent = window })
 
-text({ Position = UDim2.fromOffset(18, 12), Size = UDim2.fromOffset(170, 38), Text = "GARAGE", TextColor3 = YELLOW, TextXAlignment = Enum.TextXAlignment.Left, Parent = window })
+text({ Position = UDim2.fromOffset(18, 12), Size = UDim2.fromOffset(170, 38), Text = "GARAGE", TextColor3 = C.Ink, TextXAlignment = Enum.TextXAlignment.Left, Parent = window })
 local carsTab = text({ Position = UDim2.fromOffset(200, 14), Size = UDim2.fromOffset(110, 34), Text = "CARS", BackgroundTransparency = 0, Parent = window }, true)
 local upgradesTab = text({ Position = UDim2.fromOffset(318, 14), Size = UDim2.fromOffset(140, 34), Text = "UPGRADES", BackgroundTransparency = 0, Parent = window }, true)
 corner().Parent = carsTab
 corner().Parent = upgradesTab
-local cashLabel = text({ Position = UDim2.fromOffset(480, 14), Size = UDim2.fromOffset(300, 34), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(120, 255, 120), Parent = window })
-local closeButton = text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(38, 38), Text = "X", BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(200, 40, 40), Parent = window }, true)
+local cashLabel = text({ Position = UDim2.fromOffset(480, 14), Size = UDim2.fromOffset(300, 34), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(200, 140, 0), Parent = window })
+local closeButton = text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(38, 38), Text = "✕", BackgroundTransparency = 0, BackgroundColor3 = C.CreamDark, Parent = window }, true)
 corner().Parent = closeButton
 
 local list = create("ScrollingFrame", {
@@ -154,18 +147,19 @@ viewport.CurrentCamera = viewportCamera
 local nameLabel = text({ Position = UDim2.fromOffset(0, 258), Size = UDim2.new(1, 0, 0, 36), Parent = middle })
 local descriptionLabel = text({
 	Position = UDim2.fromOffset(0, 296),
-	Size = UDim2.new(1, 0, 0, 44),
-	Font = Enum.Font.GothamMedium,
+	Size = UDim2.new(1, 0, 0, 74),
+	FontFace = UI.FontRegular,
 	TextScaled = false,
-	TextSize = 15,
+	TextSize = 16,
 	TextWrapped = true,
-	TextColor3 = Color3.fromRGB(200, 210, 225),
+	TextYAlignment = Enum.TextYAlignment.Top,
+	TextColor3 = C.Muted,
 	TextStrokeTransparency = 1,
 	Parent = middle,
 })
 local actionButton = text({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 0, Parent = middle }, true)
 corner(10).Parent = actionButton
-local toast = text({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -60), Size = UDim2.new(1, 0, 0, 22), Font = Enum.Font.GothamBold, Text = "", Parent = middle })
+local toast = text({ Position = UDim2.fromOffset(8, 6), Size = UDim2.new(1, -16, 0, 22), FontFace = UI.Font, Text = "", ZIndex = 5, Parent = middle })
 
 -- Right: Mario Kart-style stat panel.
 local statPanel = create("Frame", {
@@ -182,7 +176,7 @@ local statPanel = create("Frame", {
 
 local statBars = {}
 for index, statName in Stats.Order do
-	text({ LayoutOrder = index * 2, Size = UDim2.new(1, 0, 0, 26), Text = Stats.Labels[statName], TextXAlignment = Enum.TextXAlignment.Left, TextStrokeTransparency = 0, Parent = statPanel })
+	text({ LayoutOrder = index * 2, Size = UDim2.new(1, 0, 0, 26), Text = Stats.Labels[statName], TextColor3 = C.White, TextXAlignment = Enum.TextXAlignment.Left, TextStrokeTransparency = 0, Parent = statPanel })
 	local bar = create("Frame", { LayoutOrder = index * 2 + 1, Size = UDim2.new(1, 0, 0, 22), BackgroundColor3 = BAR_BG, ClipsDescendants = true, Parent = statPanel }, { corner(4) })
 	local fill = create("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = YELLOW, BorderSizePixel = 0, Parent = bar })
 	local bonus = create("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = BONUS, BorderSizePixel = 0, Parent = bar })
@@ -198,7 +192,7 @@ for index, statName in Stats.Order do
 	end
 	statBars[statName] = { Fill = fill, Bonus = bonus }
 end
-text({ LayoutOrder = 100, Size = UDim2.new(1, 0, 0, 18), Text = "orange = your upgrades", Font = Enum.Font.GothamBold, TextColor3 = BONUS, TextStrokeTransparency = 1, Parent = statPanel })
+text({ LayoutOrder = 100, Size = UDim2.new(1, 0, 0, 18), Text = "orange = your upgrades", FontFace = UI.Font, TextColor3 = BONUS, TextStrokeTransparency = 1, Parent = statPanel })
 
 -- State + rendering --------------------------------------------------------------
 
@@ -210,7 +204,7 @@ local listItems = {}
 
 local function showToast(message: string, ok: boolean)
 	toast.Text = message
-	toast.TextColor3 = if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 110, 110)
+	toast.TextColor3 = if ok then Color3.fromRGB(20, 150, 80) else C.Red
 	task.delay(2.5, function()
 		if toast.Text == message then
 			toast.Text = ""
@@ -263,19 +257,19 @@ local function buildCarList()
 		local card = text({ LayoutOrder = index, Size = UDim2.new(1, -8, 0, 56), BackgroundTransparency = 0, BackgroundColor3 = CARD, Text = "", Parent = list }, true)
 		corner().Parent = card
 		if car.Id == selectedId then
-			create("UIStroke", { Color = YELLOW, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = card })
+			create("UIStroke", { Color = C.Ink, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = card })
 		end
 		create("Frame", { Position = UDim2.fromOffset(6, 8), Size = UDim2.fromOffset(8, 40), BackgroundColor3 = car.Colors.Primary, Parent = card }, { corner(3) })
 		text({ Position = UDim2.fromOffset(22, 6), Size = UDim2.new(1, -30, 0, 24), Text = car.Name, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
 		local status, color
 		if car.Id == equipped then
-			status, color = "EQUIPPED", Color3.fromRGB(120, 255, 120)
+			status, color = "EQUIPPED", Color3.fromRGB(20, 150, 80)
 		elseif ownedCars[car.Id] then
-			status, color = "OWNED", Color3.fromRGB(180, 220, 255)
+			status, color = "OWNED", C.Blue
 		else
-			status, color = formatCash(car.Price), YELLOW
+			status, color = formatCash(car.Price), Color3.fromRGB(200, 140, 0)
 		end
-		text({ Position = UDim2.fromOffset(22, 31), Size = UDim2.new(1, -30, 0, 18), Text = status, TextColor3 = color, Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
+		text({ Position = UDim2.fromOffset(22, 31), Size = UDim2.new(1, -30, 0, 18), Text = status, TextColor3 = color, FontFace = UI.Font, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
 		card.Activated:Connect(function()
 			selectedId = car.Id
 			refresh() -- updates the list, preview, name and stat bars
@@ -306,9 +300,9 @@ local function buildUpgradeList()
 		for statName, perLevel in upgrade.Boosts do
 			table.insert(boosts, string.format("+%.1f %s", perLevel, Stats.Labels[statName]))
 		end
-		text({ Position = UDim2.fromOffset(12, 30), Size = UDim2.new(1, -24, 0, 16), Text = table.concat(boosts, "  ") .. " per level", Font = Enum.Font.GothamBold, TextColor3 = BONUS, TextXAlignment = Enum.TextXAlignment.Left, TextStrokeTransparency = 1, Parent = row })
+		text({ Position = UDim2.fromOffset(12, 30), Size = UDim2.new(1, -24, 0, 16), Text = table.concat(boosts, "  ") .. " per level", FontFace = UI.Font, TextColor3 = BONUS, TextXAlignment = Enum.TextXAlignment.Left, TextStrokeTransparency = 1, Parent = row })
 		local level = levels[upgrade.Id]
-		text({ Position = UDim2.fromOffset(12, 52), Size = UDim2.fromOffset(110, 34), Text = string.rep("■", level) .. string.rep("□", upgrade.MaxLevel - level), TextColor3 = YELLOW, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+		text({ Position = UDim2.fromOffset(12, 52), Size = UDim2.fromOffset(110, 34), Text = string.rep("■", level) .. string.rep("□", upgrade.MaxLevel - level), TextColor3 = Color3.fromRGB(200, 140, 0), TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
 		local button = text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 52), Size = UDim2.fromOffset(110, 36), BackgroundTransparency = 0, Parent = row }, true)
 		corner().Parent = button
 		if level >= upgrade.MaxLevel then
@@ -338,7 +332,8 @@ function refresh()
 	end
 	local car = Cars.ById[selectedId] or Cars.List[1]
 	nameLabel.Text = car.Name
-	descriptionLabel.Text = car.Description
+	local ability = car.Ability
+	descriptionLabel.Text = string.format("%s\n%s %s (%ds cooldown): %s", car.Description, ability.Icon, ability.Name, ability.Cooldown, ability.Description)
 	setPreview(car)
 	updateStats(car)
 end

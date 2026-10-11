@@ -1,38 +1,69 @@
 # Illegal Racing (Roblox)
 
-Arcade kart-style racing where cheating is the point: nitro, oil slicks, homing rockets,
-EMP blasts, and **Steal Part**, which rips a part off the car ahead (they get slower,
-you get faster, and the part stacks on your roof as a trophy).
+Arcade kart racing where cheating is the point. Every car has its own signature ability,
+item boxes only give items from **your loadout**, and you collect new items through Item
+Rolls, the Daily Shop and daily rewards. UI is in an "Illegal Soccer" style (cream cards,
+mint buttons, key hints).
 
-Everything is built from code (track, cars, UI), so it runs in an empty Baseplate place.
+Everything is built from code (tracks, cars, lobby, UI), so it runs in an empty place.
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| WASD / arrows / gamepad / mobile stick | Drive |
+| Space or Shift (hold while turning) | Drift → Mini-Turbo |
+| **Q** (or 1) | Car ability |
+| **E** (or 2) | Use item |
+| R | Respawn at last checkpoint |
+| B (lobby) | Emote wheel |
 
 ## What's in the box
 
 | File | Does |
 | --- | --- |
-| `src/shared/Config.luau` | Race rules, rewards, drift/boost tuning, upgrades, power-ups, monetization IDs |
-| `src/shared/Cars.luau` | **All 10 cars**: price, the 6 stats, colors and brick-built design |
-| `src/shared/Stats.luau` | The 6 stats and how they turn into physics |
-| `src/shared/CarBody.luau` | Builds a car's brick body (studs on top) from its design |
-| `src/shared/Remotes.luau` | Client/server remotes |
-| `src/server/Tracks/*.luau` | **One file per track** (Downtown, Canyon, Neon Highway) |
-| `src/server/TrackBuilder.luau` | Turns a track file into road, surfaces, walls, jumps, boost pads, scenery |
-| `src/server/RaceManager.luau` | Track rotation, countdown, progress/laps, standings, rewards |
-| `src/server/Lobby.luau` | Studded lobby with a showroom of every car |
-| `src/server/CarBuilder.luau` | Physics chassis + body, swaps in custom models |
-| `src/server/PowerUps.luau` | Pick-ups and all weapon effects |
-| `src/server/PlayerData.luau` | DataStore saving (cash, wins, owned cars, upgrades) + leaderstats |
-| `src/server/Shop.luau` | Garage purchases, validated on the server |
-| `src/server/Monetization.luau` | 2x Cash game pass + cash developer products |
-| `src/client/Drive.client.luau` | Arcade driving, drifting + Mini-Turbo, surfaces, boost pads |
-| `src/client/Garage.client.luau` | Garage UI: 3D preview, stat bars, buy/equip, upgrades |
-| `src/client/Hud.client.luau` | HUD, notifications, E/R input + mobile buttons |
+| `src/shared/Config.luau` | **All tuning**: race rules, rewards, drift, items, abilities, XP, spin, store, passes, audio |
+| `src/shared/Cars.luau` | 10 cars: price, 6 stats, signature ability, brick design |
+| `src/shared/Items.luau` | 14 items with rarities (Common/Rare/Epic/Mythic), starter items, loadout size |
+| `src/shared/Progression.luau` | Levels, 7-day daily reward, item rolls + pity, rotating daily shop |
+| `src/shared/Emotes.luau` | Lobby emotes |
+| `src/shared/UI.luau` | Shared UI kit (cards, buttons, tabs, key hints, ribbons) |
+| `src/shared/Sounds.luau` | Sound effects (built-in Roblox sounds) |
+| `src/server/Tracks/*.luau` | One file per track |
+| `src/server/TrackBuilder.luau` | Builds tracks: road, borders, barriers, tunnels, grandstands, scenery |
+| `src/server/RaceManager.luau` | Voting, race loop, checkpoints + rescue, awards, XP |
+| `src/server/PowerUps.luau` | Item boxes (from your loadout) and all 14 item effects |
+| `src/server/Abilities.luau` | The 10 car abilities |
+| `src/server/Shop.luau` | Cars, upgrades, daily shop, item rolls, loadout, daily reward |
+| `src/server/Spin.luau` / `Monetization.luau` | Daily spin; Robux products + passes |
+| `src/server/Lobby.luau` | Lobby plaza, showroom, shop counter, spin booth |
+| `src/client/Hud.client.luau` | Race HUD, voting, results + awards, rescue fade |
+| `src/client/Menu.client.luau` | Shop (Daily Shop / Item Rolls / Loadout / Passes), Daily Reward, emotes |
+| `src/client/Garage.client.luau` | Cars, stats, upgrades |
+| `src/client/Drive.client.luau` | Driving physics, drifting, effects |
+| `src/client/Music.client.luau` | Music, engine loop, event sounds |
 
-**Game loop:** race → earn cash (placement + steals, 2x with pass) → buy cars and
-upgrades in the Garage → next track. Back-of-pack racers roll Rockets/Steals more often.
+### Car abilities (Q)
 
-**Controls:** WASD / arrows / gamepad / mobile stick to drive, **Space or Shift** (hold
-while turning) to drift, **E** use power-up, **R** reset to the track.
+| Car | Ability |
+| --- | --- |
+| Rusty Beater | Duct Tape: removes stolen-speed penalties + boost |
+| Go-Kart | Turbo Hop: hop + instant mini-turbo |
+| Street Tuner | Drift King: drifts charge 3x faster for 6s |
+| Dune Buggy | Dune Jump: huge forward leap |
+| Muscle Car | Battering Ram: charge and send cars flying |
+| Ice Cream Truck | Brain Freeze Jingle: slows everyone nearby |
+| Stolen Cop Car | Pull Over!: slows racers ahead |
+| Monster Truck | Monster Stomp: shockwave |
+| Supercar | Afterburner: massive boost |
+| Hypercar | Blink Drive: teleport forward along the track |
+
+### Items (E): your loadout decides what item boxes give you
+
+Common: Nitro, Oil Slick, Spike Strip, Smoke Bomb · Rare: Rocket, EMP, Steal Part, Bubble
+Shield · Epic: Freeze Ray, Magnet Hook, Tornado · Mythic: Jetpack, Orbital Laser, Black Hole.
+Everyone starts with Nitro, Oil and Rocket. Item Rolls: 62% / 30% / 7% / 1%, with a
+guaranteed Epic within 20 rolls and Mythic within 60. Duplicates refund coins.
 
 ### The 6 stats (0–10)
 
@@ -45,33 +76,33 @@ while turning) to drift, **E** use power-up, **R** reset to the track.
 | Traction | Grip, and how little dirt/grass/sand/mud slows you down |
 | Mini-Turbo | How fast drifts charge and how strong the boost is |
 
-Drift sparks go blue → orange → purple; release for a bigger boost each tier.
-
 ### Tracks (players vote between 3 random ones each round)
 
-| Track | Theme |
-| --- | --- |
-| Downtown Getaway | City streets, overpass, dirt construction zone, alley + park-grass shortcuts |
-| Dusty Canyon Run | Dirt rally, mesa climb, gorge jump, mud-pit shortcut |
-| Neon City | Dusk figure-8 with an elevated freeway and neon rails |
-| Coral Coast | Boardwalk causeway over the sea, island jump (fall in = reset), sandbar shortcut |
-| Crusher Factory | Steel catwalks, conveyor boost pads, crushers that slam the road |
-| Grand Mansion | Red carpets, marble staircase to a balcony, library shortcut |
-| Bathroom Blitz | Toy-sized in a giant bathroom: soap (ice), bathtub rim, drain jump |
+| Track | Set pieces | Shortcuts |
+| --- | --- | --- |
+| Downtown Getaway | Grandstand, skyscraper tunnel, canal overpass, construction hairpin | Park grass, parking lot, park |
+| Dusty Canyon Run | West town, mine tunnel, gorge jump, dinosaur skeleton | Mud pit, dusty trail |
+| Neon City | Neon ring tunnel, elevated freeway crossing, blimp | Back alley, rooftops |
+| Coral Coast | Pier grandstand, lighthouse, island jump, sea cave, shipwreck | West sandbar, coral reef |
+| Crusher Factory | Crushers, conveyor boosts, catwalk, furnace tunnel, scrap jump | Catwalk hairpin, east grating |
+| Grand Mansion | Gallery corridor, marble staircase + balcony, ballroom, chandeliers | Library |
+| Bathroom Blitz | Soap spill, towel climb, tub rim, drain jump, toilet-paper tunnel | Bath mat, under the sink |
 
-Every track has Mario Kart-style edges: an offroad border strip, then a barrier, with
-openings where shortcuts start. Off-track or stuck for a few seconds = auto rescue.
+Every track has invisible system checkpoints. Go out of bounds (past the barrier, off a
+jump, into the water), get stuck, or end up on the wrong part of the map, and the screen
+fades and a rescue drone puts you back at the last checkpoint.
 
 To add a track, copy a file in `src/server/Tracks/`, change the control `Points`
 (each Vector3's Y is road height) and add its file name to `TRACK_IDS` in
-`RaceManager.luau`. Track features are placed by "control point + fraction"
-(e.g. `At = 4.5` is halfway between points 4 and 5).
+`RaceManager.luau`. Features are placed by "control point + fraction" (`At = 4.5` is
+halfway between points 4 and 5). Decor can use `api.tunnel`, `api.grandstand`,
+`api.arch`, `api.alongTrack`, `api.isClear` and the props in `Props.luau`.
 
-### Lobby, daily spin and store
+### Lobby
 
-The lobby has a car shop (walk up + **E** opens the garage), showroom halls with every
-car, tower screens with the next race, and a **Daily Spin** wheel (one free spin every
-24 hours; extra spins from the wheel or the store).
+Plaza with a shop counter (E opens the garage), showroom halls with every car, tower
+screens with the next race, the Daily Spin booth, and the side menu: Garage, Shop,
+Daily, Spin, Emotes, Music.
 
 ## Setup (one time)
 
@@ -98,16 +129,29 @@ Before going live, set `Config.Race.MinPlayers = 2`.
 - New power-up: add to `Config.PowerUps` + `Config.PowerUpOrder`, then a
   `handlers.YourId` function in `PowerUps.luau`.
 
-## Monetization (store + 2x cash pass)
+## Monetization (store, passes)
 
-1. Publish the game, then on the Creator Dashboard open your experience →
+1. Publish the game. On the Creator Dashboard open your experience →
    **Monetization → Developer Products** and create one product per entry in
-   `Config.Store` (cash packs and spin packs). Paste each product's ID into its
-   `ProductId` in `src/shared/Config.luau`.
-2. Optionally create a **Pass** for 2x Cash and put its ID in
-   `Config.Monetization.DoubleCashPassId`.
+   `Config.Store` (coin packs, spin packs, 1 and 10 item rolls). Paste each product ID
+   into its `ProductId` in `src/shared/Config.luau`.
+2. Under **Monetization → Passes** create the passes in `Config.Passes` (2x Coins, VIP)
+   and paste their IDs into `PassId`.
 
-Until IDs are filled in, the store buttons just say it isn't set up yet.
+Until IDs are filled in, buttons say the product/pass isn't set up yet.
+
+## Music and engine sound
+
+Sound effects work out of the box (built-in Roblox sounds). For music:
+
+1. In Studio open the **Toolbox → Creator Store → Audio**, or create.roblox.com/store,
+   and pick free tracks from Roblox's licensed library (APM).
+2. Copy the number from each track's URL into `Config.Audio` (`LobbyMusic`,
+   `RaceMusic` list, `ResultsMusic`). Optionally add a looping engine sound as
+   `EngineLoop`; its pitch follows your speed.
+
+Players can mute music with the 🔊 button in the lobby menu. Camera zoom is limited to a
+short distance (`Main.server.luau`).
 
 ## Custom car models
 

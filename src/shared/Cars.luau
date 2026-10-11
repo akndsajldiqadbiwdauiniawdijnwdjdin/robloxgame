@@ -25,6 +25,7 @@ local METAL = Enum.Material.Metal
 Cars.List = {
 	{
 		Id = "Beater",
+		Ability = { Id = "DuctTape", Name = "Duct Tape", Icon = "🩹", Cooldown = 18, Description = "Patches the car: removes stolen-speed penalties and gives a short boost." },
 		Name = "Rusty Beater",
 		Price = 0,
 		Description = "Held together with duct tape and hope.",
@@ -54,6 +55,7 @@ Cars.List = {
 	},
 	{
 		Id = "GoKart",
+		Ability = { Id = "Hop", Name = "Turbo Hop", Icon = "🦘", Cooldown = 7, Description = "Hop into the air and land with an instant mini-turbo." },
 		Name = "Go-Kart",
 		Price = 1500,
 		Description = "Featherweight. Turns on a dime, gets bullied by everyone.",
@@ -83,6 +85,7 @@ Cars.List = {
 	},
 	{
 		Id = "Tuner",
+		Ability = { Id = "DriftKing", Name = "Drift King", Icon = "🌀", Cooldown = 16, Description = "For 6 seconds your drifts charge 3x faster." },
 		Name = "Street Tuner",
 		Price = 3000,
 		Description = "Big wing, bigger attitude. Born to drift.",
@@ -115,6 +118,7 @@ Cars.List = {
 	},
 	{
 		Id = "Buggy",
+		Ability = { Id = "DuneJump", Name = "Dune Jump", Icon = "⛰️", Cooldown = 10, Description = "Launch forward in a huge leap over anything in your way." },
 		Name = "Dune Buggy",
 		Price = 5000,
 		Description = "Laughs at sand, mud and grass. Roll cage included.",
@@ -148,6 +152,7 @@ Cars.List = {
 	},
 	{
 		Id = "Muscle",
+		Ability = { Id = "Ram", Name = "Battering Ram", Icon = "🐂", Cooldown = 14, Description = "Charge forward; anyone you hit gets sent flying." },
 		Name = "Muscle Car",
 		Price = 8000,
 		Description = "All engine, no brakes. Hits hard, turns wide.",
@@ -179,6 +184,7 @@ Cars.List = {
 	},
 	{
 		Id = "IceCream",
+		Ability = { Id = "Jingle", Name = "Brain Freeze Jingle", Icon = "🍦", Cooldown = 16, Description = "Everyone near you slows down for 2.5 seconds." },
 		Name = "Ice Cream Truck",
 		Price = 10000,
 		Description = "Slow, heavy, and absolutely unstoppable once it gets going.",
@@ -211,6 +217,7 @@ Cars.List = {
 	},
 	{
 		Id = "Cop",
+		Ability = { Id = "Siren", Name = "Pull Over!", Icon = "🚨", Cooldown = 16, Description = "Racers ahead of you are forced to slow down for 3 seconds." },
 		Name = "Stolen Cop Car",
 		Price = 15000,
 		Description = "Borrowed. Indefinitely. Great all-rounder.",
@@ -240,6 +247,7 @@ Cars.List = {
 	},
 	{
 		Id = "Monster",
+		Ability = { Id = "Stomp", Name = "Monster Stomp", Icon = "💥", Cooldown = 14, Description = "Slam the ground: a shockwave throws nearby cars." },
 		Name = "Monster Truck",
 		Price = 22000,
 		Description = "Huge tires. Drives over offroad like it's not there.",
@@ -275,6 +283,7 @@ Cars.List = {
 	},
 	{
 		Id = "Supercar",
+		Ability = { Id = "Afterburner", Name = "Afterburner", Icon = "☄️", Cooldown = 13, Description = "A massive 2-second boost that beats any nitro." },
 		Name = "Supercar",
 		Price = 35000,
 		Description = "Wedge-shaped rocket. Twitchy on dirt.",
@@ -307,6 +316,7 @@ Cars.List = {
 	},
 	{
 		Id = "Hypercar",
+		Ability = { Id = "Blink", Name = "Blink Drive", Icon = "🌌", Cooldown = 18, Description = "Teleport ~60 studs forward along the track." },
 		Name = "Hypercar",
 		Price = 75000,
 		Description = "Top of the food chain. Glows in the dark.",

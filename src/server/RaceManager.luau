@@ -10,7 +10,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Progression = require(ReplicatedStorage.Shared.Progression)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local Abilities = require(script.Parent.Abilities)
 local CarBuilder = require(script.Parent.CarBuilder)
 local Lobby = require(script.Parent.Lobby)
 local PlayerData = require(script.Parent.PlayerData)
@@ -89,15 +91,45 @@ local function updateStandings(race)
 	workspace:SetAttribute("RacerCount", #race.Ordered)
 end
 
-local function resetCar(racer)
-	local sample = track.Samples[racer.Sample]
-	local halfHeight = racer.Car:GetAttribute("HalfHeight")
-	local position = sample.Position + Vector3.new(0, halfHeight + 1.5, 0)
-	local target = CFrame.lookAt(position, position + sample.Forward)
+-- Invisible system checkpoints: every CheckpointEvery samples along the track. A rescued
+-- car goes back to the last checkpoint it reached (like Lakitu in Mario Kart).
+local function lastCheckpoint(racer): number
+	local every = TRACK.CheckpointEvery
+	return (racer.Sample - 1) // every * every + 1
+end
+
+local function resetCar(racer, reason: string?)
+	if racer.Rescuing then
+		return
+	end
+	racer.Rescuing = true
 	racer.OffTrackTime = 0
-	-- The driver's machine simulates the car, so it does the teleport too.
-	racer.Car:PivotTo(target)
-	Remotes.Effect:FireClient(racer.Player, "Teleport", target)
+	racer.OutOfBoundsTime = 0
+	racer.Car:SetAttribute("Locked", true)
+	Remotes.Effect:FireClient(racer.Player, "Rescue", reason or "OUT OF BOUNDS")
+
+	task.delay(0.45, function()
+		if not racer.Car.Parent then
+			racer.Rescuing = false
+			return
+		end
+		local index = lastCheckpoint(racer)
+		local sample = track.Samples[index]
+		local halfHeight = racer.Car:GetAttribute("HalfHeight")
+		local position = sample.Position + Vector3.new(0, halfHeight + 1.5, 0)
+		local target = CFrame.lookAt(position, position + sample.Forward)
+		-- The driver's machine simulates the car, so it does the teleport too.
+		racer.Car:PivotTo(target)
+		Remotes.Effect:FireClient(racer.Player, "Teleport", target)
+		task.delay(0.8, function()
+			racer.Rescuing = false
+			racer.OffTrackTime = 0
+			racer.OutOfBoundsTime = 0
+			if racer.Active and racer.Car.Parent then
+				racer.Car:SetAttribute("Locked", false)
+			end
+		end)
+	end)
 end
 
 -- Drivers are invisible inside their car (the car is the avatar during a race).
@@ -113,15 +145,26 @@ local function hideCharacter(character: Model)
 	end
 end
 
-local function nearShortcut(position: Vector3): boolean
+-- Distance from `position` to the nearest bit of drivable track (main road or a
+-- shortcut). Height counts double so a bridge above you doesn't count as "close".
+local function distanceToTrack(position: Vector3): number
+	local best = math.huge
+	for _, sample in track.Samples do
+		local d = flatDistance(position, sample.Position) + math.abs(position.Y - sample.Position.Y) * 2
+		if d < best then
+			best = d
+		end
+	end
 	for _, shortcut in track.Shortcuts do
 		for _, sample in shortcut.Samples do
-			if flatDistance(position, sample.Position) < shortcut.Width then
-				return true
+			-- Shortcuts are narrower: measure past their own edge, not the main road's.
+			local d = flatDistance(position, sample.Position) + math.abs(position.Y - sample.Position.Y) * 2 + (track.Edge - shortcut.Width / 2 - 3)
+			if d < best then
+				best = d
 			end
 		end
 	end
-	return false
+	return best
 end
 
 local function finish(race, racer)
@@ -150,11 +193,25 @@ local function updateRacer(race, racer)
 	local count = #samples
 	local position = racer.Chassis.Position
 
+	if racer.Rescuing then
+		return -- the rescue drone has them
+	end
+
 	-- Fell off the track (gorge, highway edge, into the sea, out of the world).
 	if position.Y < samples[racer.Sample].Position.Y - TRACK.FallDistance or position.Y < track.KillY then
-		resetCar(racer)
-		notify(racer.Player, "Whoops! Back on track.", 1.5)
+		resetCar(racer, "WHOOPS!")
 		return
+	end
+
+	-- Out of bounds: past the barrier / off the track area, anywhere on the map.
+	if distanceToTrack(position) > track.Edge + TRACK.OutOfBoundsMargin then
+		racer.OutOfBoundsTime += 0.1
+		if racer.OutOfBoundsTime >= TRACK.OutOfBoundsDelay then
+			resetCar(racer, "OUT OF BOUNDS")
+			return
+		end
+	else
+		racer.OutOfBoundsTime = 0
 	end
 
 	-- Nearest sample ahead (height counts double, so bridges and underpasses don't mix).
@@ -167,9 +224,9 @@ local function updateRacer(race, racer)
 		end
 	end
 
-	-- Lost (way off the road and not on a shortcut) or stuck: rescue after a few seconds.
-	local lost = bestDistance > track.Width * 1.6 and not nearShortcut(position)
-	-- Stuck = pressing the gas but not moving (wedged on scenery).
+	-- Lost: on some other part of the track you haven't reached yet (cut across the
+	-- map), or stuck: pressing the gas but not moving (wedged on scenery).
+	local lost = bestDistance > track.Edge + 25 and distanceToTrack(position) > track.Edge
 	local stuck = racer.Chassis.AssemblyLinearVelocity.Magnitude < 3 and racer.Seat.ThrottleFloat ~= 0
 	if lost or stuck then
 		racer.OffTrackTime += 0.1
@@ -177,8 +234,7 @@ local function updateRacer(race, racer)
 		racer.OffTrackTime = 0
 	end
 	if racer.OffTrackTime >= (if lost then TRACK.OffTrackRescue else TRACK.StuckRescue) then
-		resetCar(racer)
-		notify(racer.Player, "🚁 Rescued! Back on track.", 1.5)
+		resetCar(racer, if lost then "WRONG WAY" else "STUCK")
 		return
 	end
 
@@ -228,12 +284,18 @@ local function spawnRacers(race, participants)
 				Place = slot,
 				Score = 0,
 				Steals = 0,
+				Hits = 0, -- successful attacks on others
+				TimesHit = 0,
+				StartSlot = slot,
+				Loadout = table.clone(data.Loadout),
 				Active = true,
 				Finished = false,
 				Out = false,
 				PowerUp = nil,
 				LastReset = 0,
 				OffTrackTime = 0,
+				OutOfBoundsTime = 0,
+				Rescuing = false,
 			}
 
 			-- Jumping out of the car isn't allowed mid-race: put them back in.
@@ -250,6 +312,7 @@ local function spawnRacers(race, participants)
 				markOut(racer)
 			end)
 
+			Abilities.setup(racer, data.Equipped)
 			race.Racers[player] = racer
 			table.insert(race.Ordered, racer)
 		end
@@ -257,28 +320,103 @@ local function spawnRacers(race, participants)
 	race.Count = #race.Ordered
 end
 
+-- End-of-race awards, shown as banners on the results screen.
+local function computeAwards(race)
+	local awards = {}
+	local function give(racer, title: string, subtitle: string)
+		awards[racer] = awards[racer] or {}
+		table.insert(awards[racer], { Title = title, Subtitle = subtitle })
+	end
+	local function most(field: string)
+		local best, bestValue = nil, 0
+		for _, racer in race.Ordered do
+			if racer[field] > bestValue then
+				best, bestValue = racer, racer[field]
+			end
+		end
+		return best, bestValue
+	end
+
+	local winner = race.Ordered[1]
+	if winner and winner.Finished then
+		give(winner, "Champion", "Crossed the line first")
+	end
+	local thief, steals = most("Steals")
+	if thief then
+		give(thief, "Grand Theft Auto", string.format("Stole %d part%s", steals, if steals == 1 then "" else "s"))
+	end
+	local shooter, hits = most("Hits")
+	if shooter then
+		give(shooter, "Menace", string.format("Landed %d attack%s", hits, if hits == 1 then "" else "s"))
+	end
+	local comeback, gained = nil, 1
+	for place, racer in race.Ordered do
+		if racer.Finished and racer.StartSlot - place > gained then
+			comeback, gained = racer, racer.StartSlot - place
+		end
+	end
+	if comeback then
+		give(comeback, "Comeback Kid", string.format("Gained %d places", gained))
+	end
+	for _, racer in race.Ordered do
+		if racer.Finished and racer.TimesHit == 0 and race.Count >= 2 then
+			give(racer, "Untouchable", "Never got hit")
+		end
+	end
+	return awards
+end
+
 local function giveRewards(race)
 	local rewards = Config.Rewards
-	local lines = { "🏆 RESULTS — " .. track.Name }
+	local xpConfig = Config.XP
+	local awards = computeAwards(race)
+	local results = {}
 	for place, racer in race.Ordered do
 		local reward = if racer.Finished then rewards.Placement[place] or rewards.Finish else rewards.DNF
 		reward += racer.Steals * rewards.PerSteal
+		local xp = 0
+		if racer.Finished then
+			xp = xpConfig.Finish + (race.Count - place) * xpConfig.PerPlaceAhead
+		end
+		xp += racer.Hits * xpConfig.PerHit + racer.Steals * xpConfig.PerSteal
 
-		if racer.Player.Parent and PlayerData.get(racer.Player) then
-			local earned = PlayerData.addCash(racer.Player, reward)
-			PlayerData.update(racer.Player, function(data)
+		local earned = reward
+		local player = racer.Player
+		if player.Parent and PlayerData.get(player) then
+			if player:GetAttribute("Pass_VIP") then
+				xp = math.floor(xp * xpConfig.VIPMultiplier)
+			end
+			earned = PlayerData.addCash(player, reward)
+			local levelUp = nil
+			PlayerData.update(player, function(data)
+				local before = Progression.levelFromXP(data.XP)
 				data.Races += 1
+				data.XP += xp
 				-- Solo races don't count as wins, so wins can't be farmed alone.
 				if place == 1 and racer.Finished and race.Count >= 2 then
 					data.Wins += 1
 				end
+				local after = Progression.levelFromXP(data.XP)
+				if after > before then
+					levelUp = after
+					data.Cash += after * 100 -- level-up bonus
+				end
 			end)
-			notify(racer.Player, "+$" .. earned, 5, true)
+			if levelUp then
+				Remotes.Notify:FireClient(player, string.format("⭐ LEVEL %d! +%d coins", levelUp, levelUp * 100), 3, true)
+			end
 		end
-		local result = if racer.Finished then formatTime(racer.FinishTime) else "DNF"
-		table.insert(lines, string.format("%d. %s  %s", place, racer.Player.DisplayName, result))
+		table.insert(results, {
+			Name = player.DisplayName,
+			UserId = player.UserId,
+			Place = place,
+			Time = if racer.Finished then formatTime(racer.FinishTime) else "DNF",
+			Coins = earned,
+			XP = xp,
+			Awards = awards[racer] or {},
+		})
 	end
-	notifyAll(table.concat(lines, "\n"), RACE.ResultsTime)
+	Remotes.Results:FireAllClients({ Track = track.Name, Results = results, Duration = RACE.ResultsTime })
 end
 
 local function cleanup(race)
@@ -293,6 +431,8 @@ local function cleanup(race)
 			player:SetAttribute("Place", nil)
 			player:SetAttribute("Lap", nil)
 			player:SetAttribute("PowerUp", nil)
+			player:SetAttribute("AbilityId", nil)
+			player:SetAttribute("AbilityReadyAt", nil)
 			player:LoadCharacter() -- back to the lobby
 		end
 	end
@@ -336,6 +476,7 @@ local function runRace(race, participants)
 			break
 		end
 		PowerUps.update(race)
+		Abilities.update(race)
 		updateStandings(race)
 	end
 
@@ -444,11 +585,18 @@ function RaceManager.start()
 		end
 	end)
 
+	Remotes.UseAbility.OnServerEvent:Connect(function(player)
+		local race, racer = activeRacer(player)
+		if racer then
+			Abilities.use(race, racer)
+		end
+	end)
+
 	Remotes.ResetCar.OnServerEvent:Connect(function(player)
 		local _, racer = activeRacer(player)
 		if racer and os.clock() - racer.LastReset >= RACE.ResetCooldown then
 			racer.LastReset = os.clock()
-			resetCar(racer)
+			resetCar(racer, "RESPAWN")
 		end
 	end)
 

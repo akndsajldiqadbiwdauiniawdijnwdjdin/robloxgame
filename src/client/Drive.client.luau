@@ -13,6 +13,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Sounds = require(Shared:WaitForChild("Sounds"))
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -134,6 +135,21 @@ ContextActionService:BindActionAtPriority("Drift", function(_, inputState)
 end, true, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Space, Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonR1, Enum.KeyCode.ButtonL1)
 ContextActionService:SetTitle("Drift", "Drift")
 
+local function setJetFlames(car: Model, on: boolean)
+	local chassis = car.PrimaryPart
+	local flames = chassis and chassis:FindFirstChild("JetFlames")
+	if on and chassis and not flames then
+		flames = Instance.new("Fire")
+		flames.Name = "JetFlames"
+		flames.Size = 8
+		flames.Heat = 20
+		flames.Color = Color3.fromRGB(255, 140, 30)
+		flames.Parent = chassis
+	elseif not on and flames then
+		flames:Destroy()
+	end
+end
+
 RunService.Heartbeat:Connect(function(dt)
 	local car, seat = getCar()
 	if car ~= state.Car then
@@ -210,14 +226,24 @@ RunService.Heartbeat:Connect(function(dt)
 			surfaceGrip = 0.8
 		end
 		if hit.Instance:GetAttribute("BoostPad") then
+			if clock > state.PadUntil then
+				Sounds.play("Whoosh", 1.3)
+			end
 			state.PadUntil = clock + Config.BoostPad.Duration
 		end
 	end
 
-	-- Boosts: nitro (server), boost pads and mini-turbos (local). Biggest one wins.
+	-- Jetpack: fly over everything at full speed.
+	local flying = now < (car:GetAttribute("FlyUntil") or 0)
+	if flying then
+		surfaceSpeed, surfaceGrip = 1, 1
+	end
+	setJetFlames(car, flying)
+
+	-- Boosts: items/abilities (server), boost pads and mini-turbos (local). Biggest wins.
 	local boost = 1
 	if now < (car:GetAttribute("BoostUntil") or 0) then
-		boost = math.max(boost, Config.PowerUps.Nitro.SpeedBoost)
+		boost = math.max(boost, car:GetAttribute("BoostPower") or Config.PowerUps.Nitro.SpeedBoost)
 	end
 	if clock < state.PadUntil then
 		boost = math.max(boost, Config.BoostPad.SpeedBoost)
@@ -231,6 +257,10 @@ RunService.Heartbeat:Connect(function(dt)
 		surfaceSpeed = math.max(surfaceSpeed, 0.9) -- boosting powers through offroad
 	end
 	topSpeed *= surfaceSpeed
+	-- Slowed by Freeze Ray, Siren, Jingle, Smoke...
+	if now < (car:GetAttribute("SlowUntil") or 0) then
+		topSpeed *= car:GetAttribute("SlowFactor") or 1
+	end
 
 	local forward = Vector3.new(-math.sin(state.Heading), 0, -math.cos(state.Heading))
 	local right = Vector3.new(-forward.Z, 0, forward.X)
@@ -293,7 +323,8 @@ RunService.Heartbeat:Connect(function(dt)
 		yawRate = -state.DriftDirection * turnRate * (0.5 + 0.7 * into)
 		local outward = -state.DriftDirection * newForward * 0.18
 		newSide = moveTowards(sideSpeed, outward, grip * surfaceGrip * 20 * dt)
-		state.Charge += dt * car:GetAttribute("TurboCharge")
+		local rush = if now < (car:GetAttribute("TurboRushUntil") or 0) then 3 else 1 -- Drift King
+		state.Charge += dt * car:GetAttribute("TurboCharge") * rush
 	else
 		local speedScale = math.clamp(math.abs(forwardSpeed) / 25, 0, 1)
 		local direction = if forwardSpeed >= 0 then 1 else -1
@@ -332,7 +363,7 @@ RunService.Heartbeat:Connect(function(dt)
 	camera.FieldOfView += (targetFov - camera.FieldOfView) * math.min(1, dt * 5)
 end)
 
-Remotes.Effect.OnClientEvent:Connect(function(kind, value)
+Remotes.Effect.OnClientEvent:Connect(function(kind, value, extra)
 	local car = getCar()
 	local chassis = car and car.PrimaryPart
 	if not chassis then
@@ -341,6 +372,25 @@ Remotes.Effect.OnClientEvent:Connect(function(kind, value)
 	if kind == "Launch" then
 		airborneUntil = os.clock() + LAUNCH_AIR_TIME
 		chassis.AssemblyLinearVelocity += value
+	elseif kind == "Hop" then -- Turbo Hop / Monster Stomp: value = upward speed, extra = kick
+		airborneUntil = os.clock() + 0.35
+		chassis.AssemblyLinearVelocity += Vector3.new(0, value, 0)
+		if extra and extra > 0 then
+			state.Kick = extra
+			state.TurboUntil = os.clock() + 0.8
+		end
+	elseif kind == "Leap" or kind == "Dash" then -- Dune Jump / Magnet Hook
+		airborneUntil = os.clock() + (if kind == "Leap" then 0.6 else 0.3)
+		chassis.AssemblyLinearVelocity = Vector3.new(value.X, if kind == "Leap" then value.Y else chassis.AssemblyLinearVelocity.Y, value.Z)
+		local flatValue = Vector3.new(value.X, 0, value.Z)
+		if flatValue.Magnitude > 1 then
+			state.Heading = math.atan2(-flatValue.X, -flatValue.Z)
+		end
+	elseif kind == "Blink" then -- Blink Drive: teleport ahead but keep your speed
+		local speed = Vector3.new(chassis.AssemblyLinearVelocity.X, 0, chassis.AssemblyLinearVelocity.Z).Magnitude
+		car:PivotTo(value)
+		state.Heading = headingOf(value)
+		chassis.AssemblyLinearVelocity = value.LookVector * speed
 	elseif kind == "Teleport" then
 		car:PivotTo(value)
 		chassis.AssemblyLinearVelocity = Vector3.zero
