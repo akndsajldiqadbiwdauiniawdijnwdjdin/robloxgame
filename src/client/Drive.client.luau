@@ -318,13 +318,21 @@ RunService.Heartbeat:Connect(function(dt)
 		newSide = sideSpeed
 		yawRate = SPINOUT_RATE
 	elseif state.Drifting then
-		-- Steering into the drift tightens it, steering out widens it.
-		local into = math.clamp(0.55 + 0.45 * steerInput * state.DriftDirection, 0.1, 1)
-		yawRate = -state.DriftDirection * turnRate * (0.5 + 0.7 * into)
-		local outward = -state.DriftDirection * newForward * 0.18
-		newSide = moveTowards(sideSpeed, outward, grip * surfaceGrip * 20 * dt)
-		local rush = if now < (car:GetAttribute("TurboRushUntil") or 0) then 3 else 1 -- Drift King
-		state.Charge += dt * car:GetAttribute("TurboCharge") * rush
+		-- into = +1 holding the drift direction, -1 counter-steering (the other key).
+		local into = steerInput * state.DriftDirection
+		if into >= -0.2 then
+			-- Holding into the drift (or neutral): tighter turn, charges the Mini-Turbo.
+			yawRate = -state.DriftDirection * turnRate * (0.55 + 0.65 * math.max(into, 0))
+			local outward = -state.DriftDirection * newForward * 0.18
+			newSide = moveTowards(sideSpeed, outward, grip * surfaceGrip * 20 * dt)
+			local rush = if now < (car:GetAttribute("TurboRushUntil") or 0) then 3 else 1 -- Drift King
+			state.Charge += dt * car:GetAttribute("TurboCharge") * rush
+		else
+			-- Counter-steering: straightens the car out (can even turn slightly the other
+			-- way) without breaking the drift, but adds nothing to the Mini-Turbo.
+			yawRate = -state.DriftDirection * turnRate * (0.2 + 0.45 * into)
+			newSide = moveTowards(sideSpeed, -state.DriftDirection * newForward * 0.06, grip * surfaceGrip * 30 * dt)
+		end
 	else
 		local speedScale = math.clamp(math.abs(forwardSpeed) / 25, 0, 1)
 		local direction = if forwardSpeed >= 0 then 1 else -1

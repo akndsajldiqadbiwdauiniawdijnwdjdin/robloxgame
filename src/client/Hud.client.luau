@@ -287,7 +287,16 @@ Remotes.Results.OnClientEvent:Connect(function(payload)
 		local mine = result.UserId == player.UserId
 		local row = new("Frame", { LayoutOrder = result.Place, Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = if mine then C.Mint else C.CreamDark, BorderSizePixel = 0, ZIndex = 33, Parent = resultsList })
 		text({ Position = UDim2.fromOffset(10, 4), Size = UDim2.fromOffset(60, 32), Text = ordinal(result.Place), FontFace = UI.FontHeavy, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 34, Parent = row })
-		text({ Position = UDim2.fromOffset(74, 6), Size = UDim2.fromOffset(180, 28), Text = result.Name, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 34, Parent = row })
+		-- Avatar headshot next to the name (loaded in the background).
+		local avatar = new("ImageLabel", { Position = UDim2.fromOffset(72, 3), Size = UDim2.fromOffset(34, 34), BackgroundColor3 = C.Cream, BorderSizePixel = 0, Image = "", ZIndex = 34, Parent = row })
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = avatar })
+		task.spawn(function()
+			local ok, image = pcall(Players.GetUserThumbnailAsync, Players, result.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+			if ok and avatar.Parent then
+				avatar.Image = image
+			end
+		end)
+		text({ Position = UDim2.fromOffset(112, 6), Size = UDim2.fromOffset(144, 28), Text = result.Name, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 34, Parent = row })
 		local tags = {}
 		for _, award in result.Awards do
 			table.insert(tags, award.Title)

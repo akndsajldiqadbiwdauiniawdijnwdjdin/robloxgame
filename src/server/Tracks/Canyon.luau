@@ -45,9 +45,6 @@ return {
 		Vector3.new(-160, 1, 220),
 	},
 
-	Gaps = {
-		{ From = 8.42, To = 8.58 },
-	},
 	Shortcuts = {
 		{ Width = 14, Surface = "Mud", Points = { Vector3.new(-245, 1, -128), Vector3.new(-300, 1, -50), Vector3.new(-310, 1, 25) } },
 		{ Width = 14, Surface = "Offroad", Material = Enum.Material.Sand, Color = Color3.fromRGB(240, 205, 150), Points = { Vector3.new(-300, 1, 190), Vector3.new(-235, 1, 265), Vector3.new(-110, 1, 265) } },

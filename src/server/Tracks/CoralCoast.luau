@@ -14,6 +14,7 @@ return {
 	Ground = { Y = -14, Material = Enum.Material.Sand, Color = Color3.fromRGB(205, 185, 135), Surface = "Offroad", Margin = 350 },
 	Water = { Level = 0.6, Color = Color3.fromRGB(20, 150, 200), Transparency = 0.3 },
 	KillY = -3, -- fell in the sea
+	RoadY = 3, -- the boardwalk stays above the water
 	Border = { Width = 8, Surface = "Offroad", Material = Enum.Material.Sand, Color = Color3.fromRGB(240, 220, 165) },
 	Barrier = { Height = 2.5, Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(140, 95, 60) },
 	Support = "Fill",

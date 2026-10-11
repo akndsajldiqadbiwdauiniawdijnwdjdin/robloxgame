@@ -187,7 +187,7 @@ return {
 			api.part({ Name = "CraneJib", Size = Vector3.new(120, 4, 5), CFrame = CFrame.new(craneBase + Vector3.new(30, 108, 0)), Material = Enum.Material.DiamondPlate, Color = Color3.fromRGB(255, 200, 0) })
 		end
 		for _, crate in { { -188, -172 }, { -165, -128 }, { -155, -108 } } do
-			api.part({ Name = "Crate", Size = Vector3.new(4, 4, 4), CFrame = CFrame.new(crate[1], 3, crate[2]), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(160, 110, 60) })
+			api.part({ Name = "Crate", Size = Vector3.new(4, 4, 4), CFrame = CFrame.new(crate[1], 2.05, crate[2]), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(160, 110, 60) })
 		end
 	end,
 }

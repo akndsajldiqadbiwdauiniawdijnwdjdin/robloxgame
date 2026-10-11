@@ -52,9 +52,6 @@ return {
 		{ From = 6.1, To = 9.3, Surface = "Road", Material = Enum.Material.Marble, Color = Color3.fromRGB(250, 250, 252) }, -- tub rim
 		{ From = 7.4, To = 7.7, Surface = "Ice", Material = Enum.Material.Glass, Color = Color3.fromRGB(190, 230, 255) }, -- bubbles on the rim
 	},
-	Gaps = {
-		{ From = 9.45, To = 9.58 },
-	},
 	Shortcuts = {
 		{ Width = 14, Surface = "Offroad", Material = Enum.Material.Fabric, Color = Color3.fromRGB(240, 150, 190), Points = { Vector3.new(-170, 1, 30), Vector3.new(-120, 1, 140), Vector3.new(-115, 1, 235) } }, -- bath mat
 		{ Width = 14, Surface = "Road", Color = Color3.fromRGB(170, 150, 120), Points = { Vector3.new(310, 1, 35), Vector3.new(330, 1, -50), Vector3.new(245, 9, -140) } }, -- under the sink

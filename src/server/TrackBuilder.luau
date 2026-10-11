@@ -28,6 +28,7 @@ local SURFACE_LOOKS = {
 	Ice = { Material = Enum.Material.Ice, Color = Color3.fromRGB(200, 235, 255) },
 }
 local CURB_RED = Color3.fromRGB(210, 35, 35)
+local INVISIBLE_WALL_HEIGHT = 70
 local CURB_WHITE = Color3.fromRGB(240, 240, 240)
 
 local function catmullRom(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: number): Vector3
@@ -178,8 +179,9 @@ local function buildStrip(folder, samples, closed, opts)
 				if opts.Curbs then
 					newPart(folder, {
 						Name = "Curb",
-						Size = Vector3.new(curbWidth, 1.2, length + extra * 0.5),
-						CFrame = cf * CFrame.new(side * (width / 2 + curbWidth / 2), 0.1, 0),
+						-- Flush with the road (a raised lip snags cars).
+						Size = Vector3.new(curbWidth, 1, length + extra * 0.5),
+						CFrame = cf * CFrame.new(side * (width / 2 + curbWidth / 2), 0.01, 0),
 						Material = Enum.Material.SmoothPlastic,
 						Color = if i % 2 == 0 then CURB_RED else CURB_WHITE,
 						Attributes = { Surface = "Road" },
@@ -199,7 +201,16 @@ local function buildStrip(folder, samples, closed, opts)
 				if barrier and not inAnyRange(a.U, barrier.Except) then
 					local offset = width / 2 + curbWidth + borderWidth + 1
 					local wallCf = cf * CFrame.new(side * offset, barrier.Height / 2 + 0.5, 0)
-					if not (opts.IsOpening and opts.IsOpening(wallCf.Position)) then
+					if not (opts.IsOpening and opts.IsOpening(wallCf.Position, i)) then
+						-- Invisible wall on top so nobody flies off the track.
+						newPart(folder, {
+							Name = "InvisibleWall",
+							Size = Vector3.new(1.5, INVISIBLE_WALL_HEIGHT, length + extra * 0.5),
+							CFrame = wallCf * CFrame.new(0, barrier.Height / 2 + INVISIBLE_WALL_HEIGHT / 2, 0),
+							Transparency = 1,
+							CanQuery = false,
+							CanTouch = false,
+						})
 						newPart(folder, {
 							Name = "Barrier",
 							Size = Vector3.new(1.5 + lift, barrier.Height, length + extra * 0.5),
@@ -265,7 +276,21 @@ function TrackBuilder.build(def)
 	local spacing = Config.Track.SampleSpacing
 	local ground = def.Ground or {}
 	local groundY = ground.Y or 0
-	local samples = sampleCurve(def.Points, true, spacing, groundY + 1)
+	-- Flat by default: every road sits flush with the ground (a step between grass and
+	-- road stops cars getting back on). def.RoadY raises it (e.g. over water);
+	-- def.Flat = false keeps each point's own height.
+	local roadY = def.RoadY or (groundY + 0.05)
+	local function flatten(points)
+		if def.Flat == false then
+			return points
+		end
+		local flat = {}
+		for index, point in points do
+			flat[index] = Vector3.new(point.X, roadY, point.Z)
+		end
+		return flat
+	end
+	local samples = sampleCurve(flatten(def.Points), true, spacing, if def.Flat == false then groundY + 1 else roadY)
 	local count = #samples
 
 	local function sectionAt(u: number)
@@ -290,10 +315,21 @@ function TrackBuilder.build(def)
 	-- Shortcuts are sampled first so the main barrier can leave openings for them.
 	local shortcutPaths = {}
 	for _, shortcut in def.Shortcuts or {} do
-		local path = sampleCurve(shortcut.Points, false, spacing, groundY + 1)
+		local path = sampleCurve(flatten(shortcut.Points), false, spacing, if def.Flat == false then groundY + 1 else roadY)
 		table.insert(shortcutPaths, { Samples = path, Width = shortcut.Width, Def = shortcut })
 	end
-	local function isOpening(position: Vector3): boolean
+	local crossClear = width / 2 + (if def.Curbs ~= false then 2 else 0) + (if def.Border then def.Border.Width else 0) + 3
+	-- No barrier where a shortcut leaves the road, or where the track crosses itself.
+	local function isOpening(position: Vector3, index: number?): boolean
+		if index then
+			for other, sample in samples do
+				local apart = math.abs(other - index)
+				apart = math.min(apart, count - apart)
+				if apart > 12 and flatDistance(position, sample.Position) < crossClear and math.abs(position.Y - sample.Position.Y) < 8 then
+					return true
+				end
+			end
+		end
 		for _, shortcut in shortcutPaths do
 			for _, sample in shortcut.Samples do
 				if flatDistance(position, sample.Position) < shortcut.Width / 2 + 8 and math.abs(position.Y - sample.Position.Y) < 10 then
