@@ -11,6 +11,7 @@ local DEFINITIONS = {
 	Vote = "RemoteEvent", -- client -> server (trackId)
 	UseAbility = "RemoteEvent", -- client -> server
 	Results = "RemoteEvent", -- server -> clients (race results + awards)
+	Standings = "RemoteEvent", -- server -> clients (cup points table between races)
 	Spin = "RemoteFunction", -- client -> server () -> ok, prizeIndex | message, message
 }
 

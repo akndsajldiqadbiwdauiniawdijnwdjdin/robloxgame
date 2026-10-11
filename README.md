@@ -36,8 +36,9 @@ Everything is built from code (tracks, cars, lobby, UI), so it runs in an empty 
 | `src/server/Abilities.luau` | The 14 vehicle abilities |
 | `src/server/Shop.luau` | Cars, upgrades, daily shop, item rolls, loadout, daily reward |
 | `src/server/Spin.luau` / `Monetization.luau` | Daily spin; Robux products + passes |
-| `src/server/Lobby.luau` | Lobby plaza, showroom, shop counter, spin booth |
-| `src/client/Hud.client.luau` | Race HUD, voting, results + awards, rescue fade |
+| `src/server/Lobby.luau` | Round pit-garage lobby: logo floor, pit bays, every vehicle on a pedestal, garage counter, spin wheel, trophy case |
+| `src/client/Hud.client.luau` | Race HUD, results + awards, rescue fade |
+| `src/client/Intermission.client.luau` | Between races: cup standings, vote board with everyone's picks, track roulette |
 | `src/client/Menu.client.luau` | Shop (Daily Shop / Item Rolls / Loadout / Passes), Daily Reward, emotes |
 | `src/client/Garage.client.luau` | Cars, stats, upgrades |
 | `src/client/Drive.client.luau` | Driving physics, drifting (inside/outside), effects |
@@ -112,11 +113,30 @@ To add a track, copy a file in `src/server/Tracks/`, change the control `Points`
 halfway between points 4 and 5). Decor can use `api.tunnel`, `api.grandstand`,
 `api.arch`, `api.alongTrack`, `api.isClear` and the props in `Props.luau`.
 
+### Between races (Mario Kart style)
+
+1. **Results** for the race (avatars, times, coins, awards).
+2. **Cup standings**: points per place (15, 12, 10, 9, ...) add up over a 4-race cup;
+   the top 3 after the last race get bonus coins. Tune it in `Config.Cup`.
+3. **Vote** (30s, ends early once everyone has voted): pick one of 3 tracks. The board
+   shows every player's pick with their avatar. Close it with the X and reopen it with
+   the VOTE button.
+4. **Roulette**: it spins over everyone's picks and lands on one (a track with more
+   votes is more likely to win).
+
+Only one menu is open at a time: opening the shop, garage, spin, daily or emotes closes
+whichever was open. Every menu has a red X.
+
 ### Lobby
 
-Plaza with a shop counter (E opens the garage), showroom halls with every car, tower
-screens with the next race, the Daily Spin booth, and the side menu: Garage, Shop,
-Daily, Spin, Emotes, Music.
+A compact round pit garage: logo floor with the spawn in the middle, numbered pit bays
+(tire stacks, oil drums, tool carts, air-hose rigs, a car on a lift), every vehicle on
+a pedestal, a purple roll-up race door with the next-race screen above it, the garage
+counter (E opens the garage), the Daily Spin wheel (E at its podium), a trophy case,
+and the side menu: Vote, Garage, Shop, Daily, Spin, Emotes, Music.
+
+Tracks drive on one invisible, perfectly flat collision floor; the visible road,
+curbs and borders sit a hair above it, so seams can't stop a car.
 
 ## Setup (one time)
 

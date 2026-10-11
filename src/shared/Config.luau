@@ -5,12 +5,22 @@ Config.Race = {
 	Laps = 3, -- default; a track can override it
 	MinPlayers = 1, -- set to 2+ for live servers; 1 lets you test solo
 	MaxPlayers = 16,
-	IntermissionTime = 15,
+	IntermissionTime = 30, -- map vote
+	AllVotedTime = 4, -- once everyone has voted, the vote ends this soon
+	SelectTime = 4, -- roulette landing on the chosen track
+	StandingsTime = 8, -- cup standings between races
 	CountdownTime = 3,
 	MaxRaceTime = 300,
 	FinishGraceTime = 30, -- everyone else gets this long after the winner crosses the line
 	ResultsTime = 7,
 	ResetCooldown = 3,
+}
+
+-- Cups: points per place (Mario Kart style) over a run of races; the top 3 overall get a bonus.
+Config.Cup = {
+	Races = 4,
+	Points = { 15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 },
+	Bonus = { 1500, 800, 400 },
 }
 
 Config.Rewards = {

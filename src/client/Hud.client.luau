@@ -1,8 +1,7 @@
 -- Race HUD in the shared cream/mint style (see shared/UI.luau): place + lap card, timer,
--- map vote cards, level + coins, ability (Q) and item (E) slots, speed bar, key hints,
+-- level + coins, ability (Q) and item (E) slots, speed bar, key hints,
 -- notifications, results with award ribbons, and the out-of-bounds rescue fade.
 local ContextActionService = game:GetService("ContextActionService")
-local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -62,60 +61,7 @@ player:GetAttributeChangedSignal("XP"):Connect(refreshLevel)
 player:GetAttributeChangedSignal("Cash"):Connect(refreshLevel)
 refreshLevel()
 
--- Map voting ---------------------------------------------------------------------------
-
-local TRACK_COLORS = {
-	Downtown = Color3.fromRGB(255, 120, 0),
-	Canyon = Color3.fromRGB(190, 110, 60),
-	NeonHighway = Color3.fromRGB(220, 0, 180),
-	CoralCoast = Color3.fromRGB(0, 170, 220),
-	Factory = Color3.fromRGB(220, 170, 0),
-	Mansion = Color3.fromRGB(170, 30, 50),
-	Bathroom = Color3.fromRGB(90, 180, 230),
-}
-local voteFrame = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 122), Size = UDim2.fromOffset(640, 140), BackgroundTransparency = 1, Visible = false, Parent = gui }, {
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }),
-})
-local voteTitle = text({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 266), Size = UDim2.fromOffset(320, 26), FontFace = UI.FontHeavy, TextColor3 = C.White, TextStrokeTransparency = 0, Text = "", Parent = gui })
-local myVote = nil
-
-local function rebuildVotes()
-	for _, child in voteFrame:GetChildren() do
-		if child:IsA("GuiObject") then
-			child:Destroy()
-		end
-	end
-	local options = workspace:GetAttribute("VoteOptions")
-	local racing = player:GetAttribute("Place") ~= nil
-	voteFrame.Visible = options ~= nil and not racing
-	voteTitle.Text = if voteFrame.Visible then "VOTE FOR THE NEXT TRACK" else ""
-	if not options then
-		myVote = nil
-		return
-	end
-	local counts = HttpService:JSONDecode(workspace:GetAttribute("VoteCounts") or "{}")
-	for index, option in HttpService:JSONDecode(options) do
-		local selected = option.Id == myVote
-		local card = new("TextButton", { LayoutOrder = index, Size = UDim2.fromOffset(200, 132), BackgroundColor3 = if selected then C.Mint else C.Cream, BorderSizePixel = 0, Text = "", AutoButtonColor = true, Parent = voteFrame })
-		UI.brackets(card)
-		new("Frame", { Size = UDim2.new(1, 0, 0, 10), BackgroundColor3 = TRACK_COLORS[option.Id] or C.Gold, BorderSizePixel = 0, Parent = card })
-		text({ Position = UDim2.fromOffset(12, 20), Size = UDim2.new(1, -24, 0, 56), Text = option.Name, FontFace = UI.FontHeavy, TextWrapped = true, Parent = card })
-		local votes = counts[option.Id] or 0
-		text({ Position = UDim2.new(0, 12, 1, -48), Size = UDim2.new(1, -24, 0, 36), Text = if selected then "✓ VOTED · " .. votes else votes .. (if votes == 1 then " vote" else " votes"), TextColor3 = if selected then C.Ink else C.Muted, Parent = card })
-		card.Activated:Connect(function()
-			myVote = option.Id
-			Remotes.Vote:FireServer(option.Id)
-			rebuildVotes()
-		end)
-	end
-end
-workspace:GetAttributeChangedSignal("VoteOptions"):Connect(function()
-	myVote = nil
-	rebuildVotes()
-end)
-workspace:GetAttributeChangedSignal("VoteCounts"):Connect(rebuildVotes)
-player:GetAttributeChangedSignal("Place"):Connect(rebuildVotes)
-rebuildVotes()
+-- (Map voting, roulette and cup standings live in Intermission.client.luau.)
 
 -- Bottom centre: ability (Q) + item (E) slots and the speed bar --------------------------
 
@@ -367,8 +313,9 @@ RunService.RenderStepped:Connect(function()
 		banner.Visible = lap == laps and state == "Racing"
 		banner.Text = "FINAL LAP"
 	else
-		placeLabel.Text = if state == "Intermission" then "NEXT" else "RACE"
-		lapLabel.Text = if state == "Intermission" then "RACE" else "LIVE"
+		local labels = { Intermission = { "VOTE", "NOW" }, Selecting = { "NEXT", "RACE" }, Standings = { "CUP", "POINTS" } }
+		local pair = labels[state] or { "RACE", "LIVE" }
+		placeLabel.Text, lapLabel.Text = pair[1], pair[2]
 		divider.Visible = false
 		banner.Visible = false
 	end

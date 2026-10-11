@@ -124,8 +124,8 @@ local upgradesTab = text({ Position = UDim2.fromOffset(318, 14), Size = UDim2.fr
 corner().Parent = carsTab
 corner().Parent = upgradesTab
 local cashLabel = text({ Position = UDim2.fromOffset(480, 14), Size = UDim2.fromOffset(300, 34), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(200, 140, 0), Parent = window })
-local closeButton = text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(38, 38), Text = "✕", BackgroundTransparency = 0, BackgroundColor3 = C.CreamDark, Parent = window }, true)
-corner().Parent = closeButton
+UI.closeButton(window)
+UI.exclusive(window)
 
 local list = create("ScrollingFrame", {
 	Position = UDim2.fromOffset(14, 64),
@@ -384,9 +384,6 @@ openButton.Activated:Connect(function()
 	if window.Visible then
 		refresh()
 	end
-end)
-closeButton.Activated:Connect(function()
-	window.Visible = false
 end)
 -- Walking up to the lobby car shop and pressing E opens the garage too.
 ProximityPromptService.PromptTriggered:Connect(function(prompt)

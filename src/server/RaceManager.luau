@@ -1,4 +1,5 @@
--- Race loop: Intermission -> Countdown -> Racing -> Results -> next track.
+-- Race loop: Intermission (vote) -> Selecting (roulette) -> Countdown -> Racing ->
+-- Results -> Standings (cup points) -> back to the lobby for the next vote.
 -- Public state lives in workspace attributes (RaceState, StateEndsAt, RacerCount,
 -- TrackName, Laps) and player attributes (Place, Lap, PowerUp) for the HUD.
 --
@@ -489,6 +490,47 @@ local function runRace(race, participants)
 	task.wait(RACE.ResultsTime)
 end
 
+-- Cup standings ---------------------------------------------------------------------
+
+local CUP = Config.Cup
+local cup = { Race = 0, Points = {} } -- Points[userId] = { Name, Points }
+
+local function showStandings(race)
+	cup.Race += 1
+	local gained = {}
+	for place, racer in race.Ordered do
+		local player = racer.Player
+		local points = if racer.Finished then CUP.Points[place] or 1 else 0
+		local entry = cup.Points[player.UserId] or { Name = player.DisplayName, Points = 0 }
+		entry.Points += points
+		cup.Points[player.UserId] = entry
+		gained[player.UserId] = points
+	end
+	local rows = {}
+	for userId, entry in cup.Points do
+		table.insert(rows, { UserId = userId, Name = entry.Name, Points = entry.Points, Gained = gained[userId] or 0 })
+	end
+	table.sort(rows, function(a, b)
+		return a.Points > b.Points
+	end)
+	local final = cup.Race >= CUP.Races
+	if final then
+		for rank, row in rows do
+			local player = Players:GetPlayerByUserId(row.UserId)
+			local bonus = CUP.Bonus[rank]
+			if bonus and player and PlayerData.get(player) then
+				row.Bonus = PlayerData.addCash(player, bonus)
+			end
+		end
+	end
+	Remotes.Standings:FireAllClients({ Race = cup.Race, Races = CUP.Races, Rows = rows, Final = final, Duration = RACE.StandingsTime })
+	setState("Standings", RACE.StandingsTime)
+	task.wait(RACE.StandingsTime)
+	if final then
+		cup = { Race = 0, Points = {} }
+	end
+end
+
 local trackDefs = {}
 local function trackDef(id: string)
 	if not trackDefs[id] then
@@ -523,6 +565,22 @@ local function publishVotes()
 		end
 	end
 	workspace:SetAttribute("VoteCounts", HttpService:JSONEncode(counts))
+	-- Every player's pick, for the vote board (Track = "" while they haven't voted).
+	local ballots = {}
+	for _, player in Players:GetPlayers() do
+		table.insert(ballots, { UserId = player.UserId, Name = player.DisplayName, Track = votes[player] or "" })
+	end
+	workspace:SetAttribute("PlayerVotes", HttpService:JSONEncode(ballots))
+end
+
+local function allVoted(): boolean
+	local players = Players:GetPlayers()
+	for _, player in players do
+		if not votes[player] then
+			return false
+		end
+	end
+	return #players > 0
 end
 
 local function startVote(lastId: string?)
@@ -545,19 +603,20 @@ local function startVote(lastId: string?)
 	publishVotes()
 end
 
-local function endVote(): string
-	local counts = HttpService:JSONDecode(workspace:GetAttribute("VoteCounts") or "{}")
-	local best, bestIds = -1, {}
-	for _, id in voteOptions do
-		local count = counts[id] or 0
-		if count > best then
-			best, bestIds = count, { id }
-		elseif count == best then
-			table.insert(bestIds, id)
+-- Mario Kart style: one random ballot wins (so a track with more votes is more likely).
+-- Returns the track and the UserId whose ballot was drawn (0 = nobody voted).
+local function endVote(): (string, number)
+	local ballots = {}
+	for player, id in votes do
+		if player.Parent then
+			table.insert(ballots, { UserId = player.UserId, Id = id })
 		end
 	end
-	workspace:SetAttribute("VoteOptions", nil)
-	return bestIds[math.random(1, #bestIds)]
+	if #ballots == 0 then
+		return voteOptions[math.random(1, #voteOptions)], 0
+	end
+	local pick = ballots[math.random(1, #ballots)]
+	return pick.Id, pick.UserId
 end
 
 function RaceManager.start()
@@ -600,14 +659,20 @@ function RaceManager.start()
 		end
 	end)
 
+	Players.PlayerAdded:Connect(function()
+		if workspace:GetAttribute("VoteOptions") then
+			publishVotes()
+		end
+	end)
+
 	Players.PlayerRemoving:Connect(function(player)
 		local racer = currentRace and currentRace.Racers[player]
 		if racer then
 			markOut(racer)
 		end
-		if votes[player] then
-			votes[player] = nil
-			publishVotes()
+		votes[player] = nil
+		if workspace:GetAttribute("VoteOptions") then
+			task.defer(publishVotes) -- after they've actually left
 		end
 	end)
 
@@ -621,8 +686,15 @@ function RaceManager.start()
 	task.spawn(function()
 		while true do
 			startVote(track and track.Id)
+			local deadline = os.clock() + RACE.IntermissionTime
 			setState("Intermission", RACE.IntermissionTime)
-			task.wait(RACE.IntermissionTime)
+			while os.clock() < deadline do
+				task.wait(0.25)
+				if allVoted() and deadline - os.clock() > RACE.AllVotedTime then
+					deadline = os.clock() + RACE.AllVotedTime
+					setState("Intermission", RACE.AllVotedTime)
+				end
+			end
 
 			local participants = {}
 			for _, player in Players:GetPlayers() do
@@ -632,14 +704,24 @@ function RaceManager.start()
 			end
 
 			if #participants >= RACE.MinPlayers then
-				local winner = endVote()
-				notifyAll("🏁 Next track: " .. trackDef(winner).Name, 3, true)
+				local winner, voter = endVote()
+				workspace:SetAttribute("SelectedTrack", winner)
+				workspace:SetAttribute("SelectedVoter", voter)
+				setState("Selecting", RACE.SelectTime)
+				task.wait(RACE.SelectTime)
+				workspace:SetAttribute("VoteOptions", nil)
+				workspace:SetAttribute("SelectedTrack", nil)
 				loadTrack(winner)
 				local race = { Racers = {}, Ordered = {}, Track = track, FinishedCount = 0, Count = 0 }
 				currentRace = race
 				local ok, err = pcall(runRace, race, participants)
 				if not ok then
 					warn("[RaceManager] Race crashed:", err)
+				elseif race.Count > 0 then
+					local standingsOk, standingsErr = pcall(showStandings, race)
+					if not standingsOk then
+						warn("[RaceManager] Standings failed:", standingsErr)
+					end
 				end
 				cleanup(race)
 			end

@@ -72,25 +72,60 @@ local window = create("Frame", {
 UI.brackets(window)
 local scale = create("UIScale", { Parent = window })
 text({ Position = UDim2.fromOffset(18, 12), Size = UDim2.fromOffset(260, 38), Text = "DAILY SPIN", TextColor3 = PINK, TextXAlignment = Enum.TextXAlignment.Left, Parent = window })
-local closeButton = text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(38, 38), Text = "✕", BackgroundTransparency = 0, BackgroundColor3 = UI.Colors.CreamDark, Parent = window }, true)
-corner().Parent = closeButton
+UI.closeButton(window)
+UI.exclusive(window)
 
--- The wheel: one coloured spoke per prize, rotated around the centre.
+-- The wheel: a pie slice per prize. Each slice is filled with thin spokes fanned across
+-- its angle, with white divider lines between slices and the label out near the rim, so
+-- nothing overlaps. Slice i is centred on angle (i - 1) / #PRIZES * 360 (0 = top).
 local wheelHolder = create("Frame", { Position = UDim2.fromOffset(24, 70), Size = UDim2.fromOffset(330, 330), BackgroundTransparency = 1, Parent = window })
-local wheel = create("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(30, 30, 40), Parent = wheelHolder }, { corner(UDim.new(0.5, 0)), create("UIStroke", { Color = YELLOW, Thickness = 6 }) })
-for index, prize in PRIZES do
-	local spoke = create("Frame", {
+local wheel = create("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(30, 30, 40), ClipsDescendants = false, Parent = wheelHolder }, { corner(UDim.new(0.5, 0)), create("UIStroke", { Color = YELLOW, Thickness = 8 }) })
+local RADIUS = 165
+local SLICE = 360 / #PRIZES
+local FILL_LINES = 14 -- spokes per slice
+local function spoke(angle: number, width: number, length: number, color: Color3, z: number)
+	create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(0, 112, 0.5, -6),
-		Rotation = (index - 1) / #PRIZES * 360,
-		BackgroundColor3 = prize.Color,
+		Size = UDim2.fromOffset(width, length),
+		Rotation = angle,
+		BackgroundColor3 = color,
 		BorderSizePixel = 0,
+		ZIndex = z,
 		Parent = wheel,
-	}, { corner(10) })
-	text({ Position = UDim2.fromOffset(6, 8), Size = UDim2.new(1, -12, 0, 36), Text = prize.Label, TextColor3 = UI.Colors.White, TextStrokeTransparency = 0.1, Parent = spoke })
+	})
 end
-create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(60, 60), BackgroundColor3 = YELLOW, Parent = wheel }, { corner(UDim.new(0.5, 0)) })
+for index, prize in PRIZES do
+	local centre = (index - 1) * SLICE
+	for line = 0, FILL_LINES - 1 do
+		local angle = centre - SLICE / 2 + (line + 0.5) / FILL_LINES * SLICE
+		spoke(angle, math.ceil(2 * math.pi * RADIUS / (#PRIZES * FILL_LINES)) + 3, RADIUS - 2, prize.Color, 1)
+	end
+	spoke(centre - SLICE / 2, 3, RADIUS - 2, Color3.new(1, 1, 1), 2) -- divider
+	-- Label: a rotating arm the length of the radius with the text near its outer end,
+	-- reading outward from the centre.
+	local arm = create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(2, RADIUS),
+		Rotation = centre,
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = wheel,
+	})
+	text({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0, RADIUS * 0.36),
+		Size = UDim2.fromOffset(RADIUS * 0.55, 30),
+		Rotation = -90,
+		Text = prize.Label,
+		TextColor3 = UI.Colors.White,
+		TextStrokeTransparency = 0,
+		ZIndex = 4,
+		Parent = arm,
+	})
+end
+create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(60, 60), BackgroundColor3 = YELLOW, ZIndex = 5, Parent = wheel }, { corner(UDim.new(0.5, 0)), create("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 3 }) })
 text({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.fromOffset(44, 44), Text = "▼", TextColor3 = Color3.fromRGB(255, 255, 255), TextStrokeTransparency = 0, Parent = wheelHolder })
 
 -- Right side: spin button, spin info and the store.
@@ -106,7 +141,7 @@ local storeList = create("Frame", { Position = UDim2.fromOffset(0, 154), Size = 
 for _, item in Config.Store do
 	local row = text({ Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 0, BackgroundColor3 = CARD, Text = "", Parent = storeList }, true)
 	corner().Parent = row
-	text({ Position = UDim2.fromOffset(10, 4), Size = UDim2.new(0.6, -10, 1, -8), Text = (if item.Kind == "Spins" then "🎡 " elseif item.Kind == "Rolls" then "🎲 " else "🪙 ") .. item.Label, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+	text({ Position = UDim2.fromOffset(10, 4), Size = UDim2.new(0.6, -10, 1, -8), Text = (if item.Kind == "Spins" then "🎡 " elseif item.Kind == "Rolls" then "🎲 " else "💰 ") .. item.Label, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
 	text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 4), Size = UDim2.new(0.4, -10, 1, -8), Text = "R$ " .. item.Price, TextColor3 = Color3.fromRGB(20, 150, 80), TextXAlignment = Enum.TextXAlignment.Right, Parent = row })
 	row.Activated:Connect(function()
 		if item.ProductId == 0 then
@@ -178,9 +213,6 @@ end)
 openButton.Activated:Connect(function()
 	window.Visible = not window.Visible
 	refresh()
-end)
-closeButton.Activated:Connect(function()
-	window.Visible = false
 end)
 ProximityPromptService.PromptTriggered:Connect(function(prompt)
 	if prompt.Name == "OpenSpin" then

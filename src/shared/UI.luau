@@ -238,6 +238,67 @@ function UI.sideButton(player: Player, label: string, icon: string, order: numbe
 	return button, badge, gui
 end
 
+-- Round avatar headshot (loads in the background).
+function UI.avatar(props, userId: number)
+	local defaults = { BackgroundColor3 = C.CreamDark, BorderSizePixel = 0, Image = "" }
+	for key, value in props do
+		defaults[key] = value
+	end
+	local image = new("ImageLabel", defaults, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+	task.spawn(function()
+		local Players = game:GetService("Players")
+		local ok, url = pcall(Players.GetUserThumbnailAsync, Players, userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+		if ok and image.Parent then
+			image.Image = url
+		end
+	end)
+	return image
+end
+
+-- Only one menu window open at a time: opening a registered window closes the others.
+local exclusiveWindows = {}
+function UI.exclusive(window: GuiObject)
+	table.insert(exclusiveWindows, window)
+	window:GetPropertyChangedSignal("Visible"):Connect(function()
+		if window.Visible then
+			for _, other in exclusiveWindows do
+				if other ~= window and other.Visible then
+					other.Visible = false
+				end
+			end
+		end
+	end)
+end
+
+-- Big red X close button in a window's top-right corner.
+function UI.closeButton(window: GuiObject, onClose: (() -> ())?)
+	local button = new("TextButton", {
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.fromOffset(44, 44),
+		BackgroundColor3 = C.Red,
+		BorderSizePixel = 0,
+		Text = "X",
+		TextColor3 = C.White,
+		TextScaled = true,
+		FontFace = UI.FontHeavy,
+		ZIndex = 20,
+		Parent = window,
+	}, {
+		new("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }),
+	})
+	button.Activated:Connect(function()
+		Sounds.play("Click")
+		window.Visible = false
+		if onClose then
+			onClose()
+		end
+	end)
+	return button
+end
+
 -- Scales a fixed-size window down on small screens.
 function UI.autoScale(window: GuiObject, width: number, height: number)
 	local scale = new("UIScale", { Parent = window })

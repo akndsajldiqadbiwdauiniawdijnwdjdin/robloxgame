@@ -161,15 +161,27 @@ local function buildStrip(folder, samples, closed, opts)
 			local fullWidth = width + 2 * (curbWidth + borderWidth)
 			local extra = fullWidth * math.tan(math.min(turn, math.rad(60)) / 2) + 0.4
 
-			-- Neighbouring pieces overlap a little; alternating heights by a hair stops the
-			-- overlapping faces from flickering (z-fighting).
-			local lift = if i % 2 == 0 then 0.03 else 0
-			local cf = CFrame.lookAt((a.Position + b.Position) / 2, b.Position) * CFrame.new(0, -0.5 + lift, 0)
+			-- Driving happens on one invisible collider per segment, all at exactly the road
+			-- height, so no seam or lip can ever stop a car. The visible road, curbs and
+			-- borders sit a hair above it (alternating heights so overlapping pieces don't
+			-- flicker) and don't collide; the car's ground ray still reads their Surface.
+			local centreCf = CFrame.lookAt((a.Position + b.Position) / 2, b.Position)
+			newPart(folder, {
+				Name = "RoadCollider",
+				Size = Vector3.new(fullWidth, 1, length + extra),
+				CFrame = centreCf * CFrame.new(0, -0.5, 0),
+				Transparency = 1,
+				CanQuery = false,
+				CanTouch = false,
+			})
+			local lift = 0.02 + (if i % 2 == 0 then 0.03 else 0)
+			local cf = centreCf * CFrame.new(0, -0.5 + lift, 0)
 			local useRoadLook = surface == "Road" and opts.RoadMaterial
 			newPart(folder, {
 				Name = "Road",
 				Size = Vector3.new(width, 1, length + extra),
 				CFrame = cf,
+				CanCollide = false,
 				Material = (section and section.Material) or (if useRoadLook then opts.RoadMaterial else look.Material),
 				Color = (section and section.Color) or (if surface == "Road" and opts.RoadColor then opts.RoadColor else look.Color),
 				Attributes = { Surface = surface },
@@ -184,6 +196,7 @@ local function buildStrip(folder, samples, closed, opts)
 						CFrame = cf * CFrame.new(side * (width / 2 + curbWidth / 2), 0.01, 0),
 						Material = Enum.Material.SmoothPlastic,
 						Color = if i % 2 == 0 then CURB_RED else CURB_WHITE,
+						CanCollide = false,
 						Attributes = { Surface = "Road" },
 					})
 				end
@@ -191,7 +204,8 @@ local function buildStrip(folder, samples, closed, opts)
 					newPart(folder, {
 						Name = "Border",
 						Size = Vector3.new(borderWidth, 1, length + extra),
-						CFrame = cf * CFrame.new(side * (width / 2 + curbWidth + borderWidth / 2), 0, 0),
+						CFrame = cf * CFrame.new(side * (width / 2 + curbWidth + borderWidth / 2), -0.01, 0),
+						CanCollide = false,
 						Material = border.Material or SURFACE_LOOKS[border.Surface or "Offroad"].Material,
 						Color = border.Color or SURFACE_LOOKS[border.Surface or "Offroad"].Color,
 						Attributes = { Surface = border.Surface or "Offroad" },
@@ -279,7 +293,7 @@ function TrackBuilder.build(def)
 	-- Flat by default: every road sits flush with the ground (a step between grass and
 	-- road stops cars getting back on). def.RoadY raises it (e.g. over water);
 	-- def.Flat = false keeps each point's own height.
-	local roadY = def.RoadY or (groundY + 0.05)
+	local roadY = def.RoadY or groundY -- exactly level with the ground
 	local function flatten(points)
 		if def.Flat == false then
 			return points

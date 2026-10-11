@@ -113,6 +113,7 @@ local emoteButton = UI.sideButton(player, "EMOTES", "🕺", 5)
 -- Shop window -------------------------------------------------------------------------------
 
 local window = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(WIDTH, HEIGHT), BackgroundColor3 = C.Cream, BorderSizePixel = 0, Visible = false, Parent = gui })
+UI.exclusive(window)
 UI.autoScale(window, WIDTH, HEIGHT)
 local content = new("Frame", { Position = UDim2.fromOffset(0, 70), Size = UDim2.new(1, 0, 1, -70), BackgroundTransparency = 1, Parent = window })
 new("UIPadding", { PaddingLeft = UDim.new(0, 20), PaddingRight = UDim.new(0, 20), PaddingTop = UDim.new(0, 18), PaddingBottom = UDim.new(0, 18), Parent = content })
@@ -127,7 +128,7 @@ local barCoins = new("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UD
 new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8), Parent = barCoins })
 UI.coin(barCoins, 34)
 local barCoinLabel = text({ LayoutOrder = 2, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 40), TextScaled = false, TextSize = 36, TextColor3 = C.White, FontFace = UI.FontHeavy, Text = "0", Parent = barCoins })
-local closeButton = UI.button({ AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(56, 50), Text = "✕", Parent = tabBar }, "Cream")
+local closeButton = UI.button({ AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(56, 50), Text = "X", BackgroundColor3 = C.Red, TextColor3 = C.White, Parent = tabBar }, "Cream")
 
 local function header(parent: Instance, left: string, right: string?, order: number?)
 	local bar = new("Frame", { LayoutOrder = order or 0, Size = UDim2.new(1, 0, 0, 44), BackgroundColor3 = C.CreamDark, BorderSizePixel = 0, Parent = parent })
@@ -240,7 +241,7 @@ local function renderRolls()
 		for _, item in list do
 			local tile = iconTile(tiles, item.Icon, rarity.Color, { Size = UDim2.fromOffset(150, 140) })
 			text({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(1, -12, 0, 22), Text = item.Name, FontFace = UI.FontHeavy, Parent = tile })
-			text({ Position = UDim2.fromOffset(8, 6), Size = UDim2.fromOffset(90, 18), Text = if owned[item.Id] then "✓ Owned" else "✕ Not owned", BackgroundTransparency = 0, BackgroundColor3 = C.Cream, TextColor3 = if owned[item.Id] then Color3.fromRGB(20, 150, 80) else C.Muted, Parent = tile })
+			text({ Position = UDim2.fromOffset(8, 6), Size = UDim2.fromOffset(90, 18), Text = if owned[item.Id] then "✓ Owned" else "Not owned", BackgroundTransparency = 0, BackgroundColor3 = C.Cream, TextColor3 = if owned[item.Id] then Color3.fromRGB(20, 150, 80) else C.Muted, Parent = tile })
 		end
 	end
 	text({ LayoutOrder = 20, Size = UDim2.new(1, -10, 0, 24), Text = "Rolled items go into your Loadout pool. Duplicates refund coins.", TextColor3 = C.Muted, FontFace = UI.FontRegular, TextXAlignment = Enum.TextXAlignment.Left, Parent = scroll })
@@ -452,9 +453,10 @@ end
 -- Daily reward popup ---------------------------------------------------------------------
 
 local daily = UI.panel({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(940, 600), Visible = false, Parent = gui })
+UI.exclusive(daily)
 UI.autoScale(daily, 940, 600)
 text({ Position = UDim2.fromOffset(32, 26), Size = UDim2.fromOffset(500, 64), Text = "Daily Reward", FontFace = UI.FontHeavy, TextXAlignment = Enum.TextXAlignment.Left, Parent = daily })
-local dailyClose = UI.button({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 20), Size = UDim2.fromOffset(50, 46), Text = "✕" }, "Cream")
+local dailyClose = UI.button({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 20), Size = UDim2.fromOffset(50, 46), Text = "X", BackgroundColor3 = C.Red, TextColor3 = C.White }, "Cream")
 dailyClose.Parent = daily
 text({ Position = UDim2.fromOffset(32, 110), Size = UDim2.fromOffset(500, 34), Text = "Play every day for the best rewards!", TextColor3 = C.Muted, FontFace = UI.FontRegular, TextXAlignment = Enum.TextXAlignment.Left, Parent = daily })
 local daysLabel = text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -32, 0, 110), Size = UDim2.fromOffset(200, 34), Text = "0/7 Days", FontFace = UI.FontHeavy, TextXAlignment = Enum.TextXAlignment.Right, Parent = daily })
@@ -542,6 +544,8 @@ end)
 local wheel = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(440, 440), BackgroundTransparency = 1, Visible = false, Parent = gui })
 local wheelCenter = text({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(150, 150), BackgroundTransparency = 0.3, BackgroundColor3 = C.Bar, TextColor3 = C.White, FontFace = UI.FontHeavy, Text = "Emotes", Parent = wheel })
 new("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = wheelCenter })
+UI.closeButton(wheel).Position = UDim2.new(1, 0, 0, 0)
+UI.exclusive(wheel)
 local currentTrack: AnimationTrack? = nil
 
 local function playEmote(emoteId: string)
