@@ -12,6 +12,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Emotes = require(Shared:WaitForChild("Emotes"))
+local Icons = require(Shared:WaitForChild("Icons"))
 local Items = require(Shared:WaitForChild("Items"))
 local Progression = require(Shared:WaitForChild("Progression"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
@@ -139,13 +140,14 @@ local function header(parent: Instance, left: string, right: string?, order: num
 	return bar
 end
 
-local function iconTile(parent: Instance, icon: string, tint: Color3, props)
+-- iconId: an ability/item id with picture art (see Icons); emoji is the fallback.
+local function iconTile(parent: Instance, iconId: string?, emoji: string, tint: Color3, props)
 	local tile = new("Frame", props, {})
 	tile.BackgroundColor3 = tint:Lerp(C.Cream, 0.7)
 	tile.BorderSizePixel = 0
 	tile.Parent = parent
 	UI.brackets(tile, tint, 6)
-	text({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.62, 0.62), Text = icon, Parent = tile })
+	Icons.label({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromScale(0.68, 0.68), Parent = tile }, iconId, emoji)
 	return tile
 end
 
@@ -164,16 +166,16 @@ local function renderDailyShop()
 
 	local function offerCard(parent, index, offer, featured)
 		local owned = if offer.Kind == "Item" then ownedItems[offer.Id] else ownedEmotes[offer.Id]
-		local name, sub, icon, tint
+		local name, sub, iconId, icon, tint
 		if offer.Kind == "Item" then
 			local item = Items.ById[offer.Id]
-			name, sub, icon, tint = item.Name, item.Rarity .. " Item", item.Icon, Items.Rarities[item.Rarity].Color
+			name, sub, iconId, icon, tint = item.Name, item.Rarity .. " Item", item.Id, item.Icon, Items.Rarities[item.Rarity].Color
 		else
 			local emote = Emotes.ById[offer.Id]
-			name, sub, icon, tint = emote.Name, "Emote", "🕺", Color3.fromRGB(120, 120, 130)
+			name, sub, iconId, icon, tint = emote.Name, "Emote", nil, "🕺", Color3.fromRGB(120, 120, 130)
 		end
 		local card = new("Frame", { Size = if featured then UDim2.fromScale(1, 1) else UDim2.new(0.25, -8, 1, 0), BackgroundColor3 = C.CreamDark, BorderSizePixel = 0, Parent = parent })
-		iconTile(card, icon, tint, { Position = UDim2.fromOffset(12, 12), Size = if featured then UDim2.new(1, -24, 0, 260) else UDim2.new(1, -24, 0, 140) })
+		iconTile(card, iconId, icon, tint, { Position = UDim2.fromOffset(12, 12), Size = if featured then UDim2.new(1, -24, 0, 260) else UDim2.new(1, -24, 0, 140) })
 		local top = if featured then 284 else 160
 		text({ Position = UDim2.fromOffset(10, top), Size = UDim2.new(1, -20, 0, if featured then 40 else 30), Text = name, FontFace = UI.FontHeavy, Parent = card })
 		text({ Position = UDim2.fromOffset(10, top + (if featured then 40 else 30)), Size = UDim2.new(1, -20, 0, 22), Text = if featured then sub .. "  ·  25% OFF" else sub, TextColor3 = C.Muted, FontFace = UI.FontRegular, Parent = card })
@@ -239,7 +241,7 @@ local function renderRolls()
 		local tiles = new("Frame", { Position = UDim2.fromOffset(0, 64), Size = UDim2.new(1, 0, 0, 140), BackgroundTransparency = 1, Parent = section })
 		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), Parent = tiles })
 		for _, item in list do
-			local tile = iconTile(tiles, item.Icon, rarity.Color, { Size = UDim2.fromOffset(150, 140) })
+			local tile = iconTile(tiles, item.Id, item.Icon, rarity.Color, { Size = UDim2.fromOffset(150, 140) })
 			text({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(1, -12, 0, 22), Text = item.Name, FontFace = UI.FontHeavy, Parent = tile })
 			text({ Position = UDim2.fromOffset(8, 6), Size = UDim2.fromOffset(90, 18), Text = if owned[item.Id] then "✓ Owned" else "Not owned", BackgroundTransparency = 0, BackgroundColor3 = C.Cream, TextColor3 = if owned[item.Id] then Color3.fromRGB(20, 150, 80) else C.Muted, Parent = tile })
 		end
@@ -312,7 +314,11 @@ local function renderLoadout()
 		local item = Items.ById[loadout[index] or ""]
 		local slot = new("TextButton", { Size = UDim2.fromOffset(150, 120), BackgroundColor3 = if item then Items.Rarities[item.Rarity].Color:Lerp(C.Cream, 0.6) else C.CreamDark, BorderSizePixel = 0, Text = "", Parent = slotRow })
 		UI.brackets(slot, C.Ink, 6)
-		text({ Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 60), Text = if item then item.Icon else "+", TextColor3 = C.Muted, Parent = slot })
+		if item then
+			Icons.label({ Position = UDim2.fromOffset(8, 6), Size = UDim2.new(1, -16, 0, 64), Parent = slot }, item.Id, item.Icon)
+		else
+			text({ Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 60), Text = "+", TextColor3 = C.Muted, Parent = slot })
+		end
 		text({ Position = UDim2.fromOffset(8, 74), Size = UDim2.new(1, -16, 0, 26), Text = if item then item.Name else "Empty", FontFace = UI.FontHeavy, Parent = slot })
 		if item then
 			slot.Activated:Connect(function()
@@ -336,7 +342,12 @@ local function renderLoadout()
 		local equipped = table.find(loadout, item.Id) ~= nil
 		local card = new("TextButton", { LayoutOrder = index, BackgroundColor3 = if equipped then C.Mint else C.CreamDark, BorderSizePixel = 0, Text = "", AutoButtonColor = isOwned, Parent = grid })
 		new("Frame", { Size = UDim2.new(0, 6, 1, 0), BackgroundColor3 = Items.Rarities[item.Rarity].Color, BorderSizePixel = 0, Parent = card })
-		text({ Position = UDim2.fromOffset(14, 8), Size = UDim2.fromOffset(50, 50), Text = if isOwned then item.Icon else "🔒", Parent = card })
+		if isOwned then
+			Icons.label({ Position = UDim2.fromOffset(12, 8), Size = UDim2.fromOffset(54, 54), Parent = card }, item.Id, item.Icon)
+		else
+			local locked = Icons.label({ Position = UDim2.fromOffset(12, 8), Size = UDim2.fromOffset(54, 54), ImageTransparency = 0.6, ImageColor3 = Color3.fromRGB(90, 90, 90), Parent = card }, item.Id, item.Icon)
+			text({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.6, 0.6), Text = "🔒", ZIndex = locked.ZIndex + 1, Parent = locked })
+		end
 		text({ Position = UDim2.fromOffset(70, 6), Size = UDim2.new(1, -78, 0, 26), Text = item.Name, FontFace = UI.FontHeavy, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
 		text({ Position = UDim2.fromOffset(70, 32), Size = UDim2.new(1, -78, 0, 56), Text = item.Description, TextColor3 = C.Muted, FontFace = UI.FontRegular, TextScaled = false, TextSize = 14, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Parent = card })
 		card.Activated:Connect(function()
@@ -407,7 +418,7 @@ end
 local reveal = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.4, Visible = false, ZIndex = 60, Parent = gui })
 local revealCard = UI.panel({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(340, 420), ZIndex = 61, Parent = reveal })
 local revealRarity = text({ Position = UDim2.fromOffset(20, 20), Size = UDim2.new(1, -40, 0, 34), FontFace = UI.FontHeavy, ZIndex = 62, Text = "", Parent = revealCard })
-local revealIcon = text({ Position = UDim2.fromOffset(20, 64), Size = UDim2.new(1, -40, 0, 190), ZIndex = 62, Text = "", Parent = revealCard })
+local revealIcon = Icons.view({ Position = UDim2.fromOffset(20, 64), Size = UDim2.new(1, -40, 0, 190), ZIndex = 62, Parent = revealCard })
 local revealName = text({ Position = UDim2.fromOffset(20, 262), Size = UDim2.new(1, -40, 0, 44), FontFace = UI.FontHeavy, ZIndex = 62, Text = "", Parent = revealCard })
 local revealNote = text({ Position = UDim2.fromOffset(20, 308), Size = UDim2.new(1, -40, 0, 26), TextColor3 = C.Muted, ZIndex = 62, Text = "", Parent = revealCard })
 local revealOk = UI.button({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.new(1, -40, 0, 56), Text = "Nice!", ZIndex = 62, Parent = revealCard }, "Mint")
@@ -420,7 +431,7 @@ function rollReveal(result)
 	revealCard.BackgroundColor3 = rarity.Color:Lerp(C.Cream, 0.75)
 	revealRarity.Text = string.upper(result.Rarity)
 	revealRarity.TextColor3 = rarity.Color
-	revealIcon.Text = item.Icon
+	Icons.set(revealIcon, item.Id, item.Icon)
 	revealName.Text = item.Name
 	revealNote.Text = if result.Duplicate then "Duplicate: +" .. result.Refund .. " coins" else "NEW! Added to your items"
 	reveal.Visible = true

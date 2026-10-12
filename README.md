@@ -27,6 +27,7 @@ Everything is built from code (tracks, cars, lobby, UI), so it runs in an empty 
 | `src/shared/Items.luau` | 14 items with rarities (Common/Rare/Epic/Mythic), starter items, loadout size |
 | `src/shared/Progression.luau` | Levels, 7-day daily reward, item rolls + pity, rotating daily shop |
 | `src/shared/Emotes.luau` | Lobby emotes |
+| `src/shared/Icons.luau` + `IconData.luau` | Picture icons for all 14 abilities and 14 items (packed 128x128 art, drawn with EditableImage; falls back to emoji) |
 | `src/shared/UI.luau` | Shared UI kit (cards, buttons, tabs, key hints, ribbons) |
 | `src/shared/Sounds.luau` | Sound effects (built-in Roblox sounds) |
 | `src/server/Tracks/*.luau` | One file per track |

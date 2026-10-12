@@ -10,6 +10,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CarBody = require(Shared:WaitForChild("CarBody"))
 local Cars = require(Shared:WaitForChild("Cars"))
 local Config = require(Shared:WaitForChild("Config"))
+local Icons = require(Shared:WaitForChild("Icons"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Stats = require(Shared:WaitForChild("Stats"))
 local UI = require(Shared:WaitForChild("UI"))
@@ -165,6 +166,9 @@ local descriptionLabel = text({
 })
 local actionButton = text({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 0, Parent = middle }, true)
 corner(10).Parent = actionButton
+-- The car's ability icon in the preview's bottom-left corner.
+local abilityBadge = Icons.view({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset(8, 242), Size = UDim2.fromOffset(64, 64), ZIndex = 4, Parent = middle })
+
 -- Motorcycles only: switch between inside and outside drift (saved per bike).
 local driftButton = text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 8), Size = UDim2.fromOffset(170, 34), BackgroundTransparency = 0, BackgroundColor3 = C.Blue, ZIndex = 4, Visible = false, Parent = middle }, true)
 corner(8).Parent = driftButton
@@ -342,7 +346,8 @@ function refresh()
 	local car = Cars.ById[selectedId] or Cars.List[1]
 	nameLabel.Text = car.Name
 	local ability = car.Ability
-	descriptionLabel.Text = string.format("%s\n%s %s (%ds cooldown): %s", car.Description, ability.Icon, ability.Name, ability.Cooldown, ability.Description)
+	descriptionLabel.Text = string.format("%s\n%s (%ds cooldown): %s", car.Description, ability.Name, ability.Cooldown, ability.Description)
+	Icons.set(abilityBadge, ability.Id, ability.Icon)
 	driftButton.Visible = car.Bike == true and tab == "Cars"
 	if car.Bike then
 		local style = bikeDrift(car)

@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Cars = require(Shared:WaitForChild("Cars"))
 local Config = require(Shared:WaitForChild("Config"))
+local Icons = require(Shared:WaitForChild("Icons"))
 local Items = require(Shared:WaitForChild("Items"))
 local Progression = require(Shared:WaitForChild("Progression"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
@@ -69,7 +70,7 @@ local slots = new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2
 local function makeSlot(x: number, key: string)
 	local slot = new("TextButton", { Position = UDim2.fromOffset(x, 0), Size = UDim2.fromOffset(80, 80), BackgroundColor3 = C.Cream, BackgroundTransparency = 0.05, BorderSizePixel = 0, Text = "", AutoButtonColor = true, Parent = slots })
 	UI.brackets(slot, C.Ink, 3)
-	local icon = text({ Position = UDim2.fromOffset(10, 6), Size = UDim2.fromOffset(60, 54), Text = "", Parent = slot })
+	local icon = Icons.view({ Position = UDim2.fromOffset(4, 4), Size = UDim2.fromOffset(72, 72), Parent = slot })
 	local cooldown = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0), BackgroundColor3 = C.Bar, BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 5, Parent = slot })
 	local seconds = text({ Size = UDim2.fromScale(1, 1), Text = "", TextColor3 = C.White, FontFace = UI.FontHeavy, ZIndex = 6, Parent = slot })
 	text({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, 2), Size = UDim2.fromOffset(24, 22), BackgroundTransparency = 0, BackgroundColor3 = C.Cream, Text = key, FontFace = UI.FontHeavy, ZIndex = 7, Parent = slot })
@@ -343,7 +344,7 @@ RunService.RenderStepped:Connect(function()
 
 	-- Ability slot with cooldown sweep.
 	local ability = abilitiesById[player:GetAttribute("AbilityId") or ""]
-	abilityIcon.Text = if ability then ability.Icon else ""
+	Icons.set(abilityIcon, ability and ability.Id, ability and ability.Icon)
 	local readyAt = player:GetAttribute("AbilityReadyAt") or 0
 	local cooldownLeft = math.max(0, readyAt - serverNow)
 	abilityCooldown.Size = UDim2.fromScale(1, if ability and cooldownLeft > 0 then cooldownLeft / ability.Cooldown else 0)
@@ -352,7 +353,7 @@ RunService.RenderStepped:Connect(function()
 	-- Item slot.
 	local itemId = player:GetAttribute("PowerUp")
 	local item = itemId and Items.ById[itemId]
-	itemIcon.Text = if item then item.Icon else ""
+	Icons.set(itemIcon, item and item.Id, item and item.Icon)
 	itemSlot.BackgroundColor3 = if item then Items.Rarities[item.Rarity].Color:Lerp(C.Cream, 0.55) else C.Cream
 	slotCaption.Text = if item then item.Name elseif ability and cooldownLeft <= 0 then ability.Name .. " ready!" else ""
 
